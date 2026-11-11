@@ -14,7 +14,7 @@ final databaseProvider = Provider<AppDatabase>((ref) =>
 
 @DriftDatabase(tables: [Accounts, FinanceTransactions, LedgerEntries, Transfers])
 class AppDatabase extends _$AppDatabase {
-  AppDatabase(QueryExecutor executor) : super(executor);
+  AppDatabase(super.executor);
 
   static const _uuid = Uuid();
 
