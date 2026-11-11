@@ -1,0 +1,35 @@
+import 'package:drift/drift.dart';
+
+class Accounts extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text().withLength(min: 1, max: 80)();
+  TextColumn get type => text()();
+  IntColumn get openingBalance => integer().withDefault(const Constant(0))();
+  BoolColumn get archived => boolean().withDefault(const Constant(false))();
+  DateTimeColumn get createdAt => dateTime()();
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+class FinanceTransactions extends Table {
+  TextColumn get id => text()();
+  TextColumn get type => text()(); // income / expense
+  TextColumn get accountId => text().references(Accounts, #id)();
+  IntColumn get amount => integer()();
+  TextColumn get title => text()();
+  TextColumn get category => text().nullable()();
+  DateTimeColumn get occurredAt => dateTime()();
+  DateTimeColumn get createdAt => dateTime()();
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+class LedgerEntries extends Table {
+  TextColumn get id => text()();
+  TextColumn get transactionId => text().references(FinanceTransactions, #id)();
+  TextColumn get accountId => text().references(Accounts, #id)();
+  IntColumn get amountDelta => integer()();
+  DateTimeColumn get createdAt => dateTime()();
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
