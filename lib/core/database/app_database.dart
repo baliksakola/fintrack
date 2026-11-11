@@ -545,12 +545,12 @@ class AppDatabase extends _$AppDatabase {
     }
 
     await transaction(() async {
+      await delete(debtPayments).go();
       await delete(ledgerEntries).go();
       await delete(transfers).go();
       await delete(financeTransactions).go();
-      await delete(budgets).go();
-      await delete(debtPayments).go();
       await delete(debts).go();
+      await delete(budgets).go();
       await delete(bills).go();
       await delete(accounts).go();
 
