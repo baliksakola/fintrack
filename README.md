@@ -21,6 +21,8 @@ Aplikasi Android pengelolaan keuangan pribadi dengan pendekatan **local-first**.
 - Filter riwayat berdasarkan jenis transaksi.
 - Edit pemasukan/pengeluaran dan hapus transaksi dengan penyesuaian saldo.
 - Transfer antar-rekening.
+- Anggaran bulanan per kategori dengan indikator penggunaan dan peringatan batas.
+- Laporan pemasukan/pengeluaran, grafik 7 hari, dan rekap kategori.
 - Ledger untuk menghitung saldo rekening.
 - Test dasar untuk pemasukan, pengeluaran, transfer, dan validasi nominal.
 
@@ -57,4 +59,4 @@ test/                  # Pengujian ledger
 ```
 
 ## Catatan pengembangan
-Source saat ini adalah implementasi inti tahap awal. Fitur biaya transfer, tagihan, anggaran, cicilan, utang/piutang, aset, kalender, backup/restore, import/export, dan enkripsi backup masih masuk roadmap dan tidak boleh dianggap tersedia sebelum diimplementasikan serta diuji.
+Source saat ini adalah implementasi inti tahap awal. Fitur biaya transfer, tagihan otomatis, cicilan, utang/piutang, aset, kalender, backup/restore, import/export, dan enkripsi backup masih masuk roadmap dan tidak boleh dianggap tersedia sebelum diimplementasikan serta diuji.
