@@ -1651,10 +1651,14 @@ class _BillsSectionState extends State<BillsSection> {
                 onTap: () async {
                   final picked = await showDatePicker(context: dialogContext, initialDate: dueDate,
                     firstDate: DateTime(2020), lastDate: DateTime(2100));
-                  if (picked != null) setDialogState(() {
-                    dueDate = picked;
-                    if (repeatUntil.isBefore(dueDate)) repeatUntil = _addMonthsClamped(dueDate, 5);
-                  });
+                  if (picked != null) {
+                    setDialogState(() {
+                      dueDate = picked;
+                      if (repeatUntil.isBefore(dueDate)) {
+                        repeatUntil = _addMonthsClamped(dueDate, 5);
+                      }
+                    });
+                  }
                 }),
               SwitchListTile(contentPadding: EdgeInsets.zero, value: monthly,
                 title: const Text('Ulangi setiap bulan'),
