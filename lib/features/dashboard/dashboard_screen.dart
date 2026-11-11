@@ -16,15 +16,38 @@ final _rupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDig
 const _incomeCategories = ['Gaji', 'Bonus', 'Usaha', 'Investasi', 'Hadiah', 'Lainnya'];
 const _expenseCategories = ['Makanan', 'Transportasi', 'Belanja', 'Tagihan', 'Kesehatan', 'Pendidikan', 'Hiburan', 'Lainnya'];
 
-class DashboardScreen extends ConsumerWidget {
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  int _selectedIndex = 0;
+
+  static const _titles = [
+    'Ringkasan',
+    'Aktivitas',
+    'Tagihan & Rencana',
+    'Laporan',
+    'Lainnya',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
     final db = ref.watch(databaseProvider);
+    final pages = [
+      _OverviewPage(database: db),
+      _ActivityPage(database: db),
+      _PlanningPage(database: db),
+      _ReportsPage(database: db),
+      _MorePage(database: db),
+    ];
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('FinTrack'),
+        title: Text(_titles[_selectedIndex]),
         actions: [
           IconButton(
             tooltip: 'Tambah rekening',
@@ -33,100 +56,323 @@ class DashboardScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: StreamBuilder<int>(
-        stream: db.watchTotalBalance(),
-        builder: (context, balanceSnapshot) {
-          final total = balanceSnapshot.data ?? 0;
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Total saldo', style: Theme.of(context).textTheme.titleMedium),
-                      const SizedBox(height: 8),
-                      Text(_rupiah.format(total),
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 4),
-                      const Text('Saldo gabungan seluruh rekening aktif'),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  FilledButton.icon(
-                    onPressed: () => _showTransactionDialog(context, db, 'income'),
-                    icon: const Icon(Icons.add),
-                    label: const Text('Pemasukan'),
-                  ),
-                  FilledButton.tonalIcon(
-                    onPressed: () => _showTransactionDialog(context, db, 'expense'),
-                    icon: const Icon(Icons.remove),
-                    label: const Text('Pengeluaran'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: () => _showTransferDialog(context, db),
-                    icon: const Icon(Icons.swap_horiz),
-                    label: const Text('Transfer'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              Text('Rekening', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 8),
-              StreamBuilder<List<Account>>(
-                stream: db.watchAccounts(),
-                builder: (context, snapshot) {
-                  final accounts = snapshot.data ?? [];
-                  if (accounts.isEmpty) {
-                    return const Card(child: Padding(
-                      padding: EdgeInsets.all(20),
-                      child: Text('Belum ada rekening. Tambahkan rekening pertama.'),
-                    ));
-                  }
-                  return Column(
-                    children: accounts.map((account) => Card(
-                      child: ListTile(
-                        leading: const CircleAvatar(child: Icon(Icons.account_balance_wallet_outlined)),
-                        title: Text(account.name),
-                        subtitle: Text(account.type),
-                        trailing: FutureBuilder<int>(
-                          future: db.balanceFor(account.id),
-                          builder: (context, value) => Text(
-                            _rupiah.format(value.data ?? account.openingBalance),
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                      ),
-                    )).toList(),
-                  );
-                },
-              ),
-              const SizedBox(height: 24),
-              BackupSection(database: db),
-              const SizedBox(height: 24),
-              BillsSection(database: db),
-              const SizedBox(height: 24),
-              DebtSection(database: db),
-              const SizedBox(height: 24),
-              BudgetSection(database: db),
-              const SizedBox(height: 24),
-              FinanceReportsSection(database: db),
-              const SizedBox(height: 24),
-              TransactionHistorySection(database: db),
-            ],
-          );
-        },
+      body: SafeArea(
+        child: IndexedStack(
+          index: _selectedIndex,
+          children: pages,
+        ),
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _selectedIndex,
+        onDestinationSelected: (index) => setState(() => _selectedIndex = index),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.space_dashboard_outlined),
+            selectedIcon: Icon(Icons.space_dashboard),
+            label: 'Home',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.receipt_long_outlined),
+            selectedIcon: Icon(Icons.receipt_long),
+            label: 'Aktivitas',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.event_note_outlined),
+            selectedIcon: Icon(Icons.event_note),
+            label: 'Rencana',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.analytics_outlined),
+            selectedIcon: Icon(Icons.analytics),
+            label: 'Laporan',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.more_horiz),
+            selectedIcon: Icon(Icons.more_horiz),
+            label: 'Lainnya',
+          ),
+        ],
       ),
     );
   }
+}
+
+class _OverviewPage extends StatelessWidget {
+  const _OverviewPage({required this.database});
+  final AppDatabase database;
+
+  @override
+  Widget build(BuildContext context) => ListView(
+    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+    children: [
+      StreamBuilder<int>(
+        stream: database.watchTotalBalance(),
+        builder: (context, snapshot) {
+          final total = snapshot.data ?? 0;
+          return Card(
+            clipBehavior: Clip.antiAlias,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Theme.of(context).colorScheme.primaryContainer,
+                    Theme.of(context).colorScheme.surfaceContainerHighest,
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Total saldo', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  Text(
+                    _rupiah.format(total),
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Gabungan seluruh rekening aktif',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+      const SizedBox(height: 16),
+      Text('Aksi cepat', style: Theme.of(context).textTheme.titleMedium),
+      const SizedBox(height: 8),
+      Row(
+        children: [
+          Expanded(
+            child: _QuickAction(
+              icon: Icons.add_circle_outline,
+              label: 'Pemasukan',
+              onTap: () => _showTransactionDialog(context, database, 'income'),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _QuickAction(
+              icon: Icons.remove_circle_outline,
+              label: 'Pengeluaran',
+              onTap: () => _showTransactionDialog(context, database, 'expense'),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _QuickAction(
+              icon: Icons.swap_horiz,
+              label: 'Transfer',
+              onTap: () => _showTransferDialog(context, database),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 20),
+      Row(
+        children: [
+          Expanded(
+            child: Text('Rekening', style: Theme.of(context).textTheme.titleMedium),
+          ),
+          TextButton.icon(
+            onPressed: () => _showAccountDialog(context, database),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Tambah'),
+          ),
+        ],
+      ),
+      _AccountsList(database: database),
+      const SizedBox(height: 12),
+      Text('Transaksi terbaru', style: Theme.of(context).textTheme.titleMedium),
+      const SizedBox(height: 8),
+      _RecentTransactions(database: database),
+    ],
+  );
+}
+
+class _ActivityPage extends StatelessWidget {
+  const _ActivityPage({required this.database});
+  final AppDatabase database;
+
+  @override
+  Widget build(BuildContext context) => ListView(
+    padding: const EdgeInsets.all(16),
+    children: [TransactionHistorySection(database: database)],
+  );
+}
+
+class _PlanningPage extends StatelessWidget {
+  const _PlanningPage({required this.database});
+  final AppDatabase database;
+
+  @override
+  Widget build(BuildContext context) => ListView(
+    padding: const EdgeInsets.all(16),
+    children: [
+      BillsSection(database: database),
+      const SizedBox(height: 20),
+      DebtSection(database: database),
+      const SizedBox(height: 20),
+      BudgetSection(database: database),
+    ],
+  );
+}
+
+class _ReportsPage extends StatelessWidget {
+  const _ReportsPage({required this.database});
+  final AppDatabase database;
+
+  @override
+  Widget build(BuildContext context) => ListView(
+    padding: const EdgeInsets.all(16),
+    children: [FinanceReportsSection(database: database)],
+  );
+}
+
+class _MorePage extends StatelessWidget {
+  const _MorePage({required this.database});
+  final AppDatabase database;
+
+  @override
+  Widget build(BuildContext context) => ListView(
+    padding: const EdgeInsets.all(16),
+    children: [
+      Text('Pengelolaan data', style: Theme.of(context).textTheme.titleMedium),
+      const SizedBox(height: 8),
+      BackupSection(database: database),
+    ],
+  );
+}
+
+class _QuickAction extends StatelessWidget {
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
+        child: Column(
+          children: [
+            Icon(icon, size: 24),
+            const SizedBox(height: 6),
+            Text(label, textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.labelMedium),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _AccountsList extends StatelessWidget {
+  const _AccountsList({required this.database});
+  final AppDatabase database;
+
+  @override
+  Widget build(BuildContext context) => StreamBuilder<List<Account>>(
+    stream: database.watchAccounts(),
+    builder: (context, snapshot) {
+      if (snapshot.hasError) {
+        return const Card(child: ListTile(title: Text('Rekening gagal dimuat.')));
+      }
+      final accounts = snapshot.data ?? [];
+      if (accounts.isEmpty) {
+        return const Card(
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: Text('Belum ada rekening. Tambahkan rekening pertama.'),
+          ),
+        );
+      }
+      return Column(
+        children: accounts.map((account) => Card(
+          child: ListTile(
+            leading: const CircleAvatar(
+              child: Icon(Icons.account_balance_wallet_outlined),
+            ),
+            title: Text(account.name),
+            subtitle: Text(account.type),
+            trailing: FutureBuilder<int>(
+              future: database.balanceFor(account.id),
+              builder: (context, balance) => Text(
+                _rupiah.format(balance.data ?? account.openingBalance),
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+        )).toList(),
+      );
+    },
+  );
+}
+
+class _RecentTransactions extends StatelessWidget {
+  const _RecentTransactions({required this.database});
+  final AppDatabase database;
+
+  @override
+  Widget build(BuildContext context) => StreamBuilder<List<FinanceTransaction>>(
+    stream: database.watchTransactions(),
+    builder: (context, snapshot) {
+      if (snapshot.hasError) {
+        return const Card(child: ListTile(title: Text('Transaksi gagal dimuat.')));
+      }
+      final items = (snapshot.data ?? []).take(5).toList();
+      if (items.isEmpty) {
+        return const Card(
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: Text('Belum ada transaksi.'),
+          ),
+        );
+      }
+      return Column(
+        children: items.map((tx) {
+          final isIncome = tx.type == 'income';
+          final isTransfer = tx.type == 'transfer';
+          return Card(
+            child: ListTile(
+              leading: CircleAvatar(
+                child: Icon(isTransfer
+                  ? Icons.swap_horiz
+                  : isIncome ? Icons.south_west : Icons.north_east),
+              ),
+              title: Text(tx.title),
+              subtitle: Text(DateFormat('dd MMM yyyy', 'id_ID').format(tx.occurredAt)),
+              trailing: Text(
+                '${isIncome ? '+' : isTransfer ? '' : '-'}${_rupiah.format(tx.amount)}',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: isIncome ? Colors.green : isTransfer
+                    ? Theme.of(context).colorScheme.onSurface
+                    : Colors.red,
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      );
+    },
+  );
 }
 
 Future<void> _showAccountDialog(BuildContext context, AppDatabase db) async {
