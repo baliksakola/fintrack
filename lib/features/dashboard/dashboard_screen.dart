@@ -303,23 +303,76 @@ class _AccountsList extends StatelessWidget {
           ),
         );
       }
-      return Column(
-        children: accounts.map((account) => Card(
-          child: ListTile(
-            leading: const CircleAvatar(
-              child: Icon(Icons.account_balance_wallet_outlined),
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final columns = constraints.maxWidth >= 520 ? 3 : 2;
+          final ratio = columns == 2 ? 1.65 : 1.8;
+          return GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: accounts.length,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columns,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: ratio,
             ),
-            title: Text(account.name),
-            subtitle: Text(account.type),
-            trailing: FutureBuilder<int>(
-              future: database.balanceFor(account.id),
-              builder: (context, balance) => Text(
-                _rupiah.format(balance.data ?? account.openingBalance),
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ),
-          ),
-        )).toList(),
+            itemBuilder: (context, index) {
+              final account = accounts[index];
+              return Card(
+                margin: EdgeInsets.zero,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            account.type == 'Tunai'
+                                ? Icons.payments_outlined
+                                : account.type == 'E-Wallet'
+                                    ? Icons.account_balance_wallet_outlined
+                                    : Icons.account_balance_outlined,
+                            size: 19,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              account.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.labelLarge,
+                            ),
+                          ),
+                        ],
+                      ),
+                      FutureBuilder<int>(
+                        future: database.balanceFor(account.id),
+                        builder: (context, balance) => Text(
+                          _rupiah.format(balance.data ?? account.openingBalance),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        account.type,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
       );
     },
   );
@@ -345,31 +398,66 @@ class _RecentTransactions extends StatelessWidget {
           ),
         );
       }
-      return Column(
-        children: items.map((tx) {
-          final isIncome = tx.type == 'income';
-          final isTransfer = tx.type == 'transfer';
-          return Card(
-            child: ListTile(
-              leading: CircleAvatar(
-                child: Icon(isTransfer
-                  ? Icons.swap_horiz
-                  : isIncome ? Icons.south_west : Icons.north_east),
-              ),
-              title: Text(tx.title),
-              subtitle: Text(DateFormat('dd MMM yyyy', 'id_ID').format(tx.occurredAt)),
-              trailing: Text(
-                '${isIncome ? '+' : isTransfer ? '' : '-'}${_rupiah.format(tx.amount)}',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: isIncome ? Colors.green : isTransfer
-                    ? Theme.of(context).colorScheme.onSurface
-                    : Colors.red,
+      return Card(
+        margin: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            for (var index = 0; index < items.length; index++) ...[
+              if (index > 0)
+                Divider(
+                  height: 1,
+                  indent: 64,
+                  color: Theme.of(context).colorScheme.outlineVariant,
                 ),
+              Builder(
+                builder: (context) {
+                  final tx = items[index];
+                  final isIncome = tx.type == 'income';
+                  final isTransfer = tx.type == 'transfer';
+                  final amountColor = isIncome
+                      ? Colors.green.shade700
+                      : isTransfer
+                          ? Theme.of(context).colorScheme.onSurface
+                          : Theme.of(context).colorScheme.error;
+                  return ListTile(
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+                    leading: CircleAvatar(
+                      radius: 18,
+                      child: Icon(
+                        isTransfer
+                            ? Icons.swap_horiz
+                            : isIncome ? Icons.south_west : Icons.north_east,
+                        size: 18,
+                      ),
+                    ),
+                    title: Text(
+                      tx.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      DateFormat('dd MMM yyyy', 'id_ID').format(tx.occurredAt),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    trailing: Text(
+                      '${isIncome ? '+' : isTransfer ? '' : '-'}${_rupiah.format(tx.amount)}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: amountColor,
+                        fontSize: 12,
+                      ),
+                    ),
+                  );
+                },
               ),
-            ),
-          );
-        }).toList(),
+            ],
+          ],
+        ),
       );
     },
   );
