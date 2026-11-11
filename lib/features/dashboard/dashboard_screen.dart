@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:fintrack/core/backup/backup_crypto.dart';
+import 'package:fintrack/core/notifications/bill_notification_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -760,6 +761,59 @@ class BillsSection extends StatefulWidget {
 }
 
 class _BillsSectionState extends State<BillsSection> {
+  bool _remindersEnabled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReminderState();
+  }
+
+  Future<void> _loadReminderState() async {
+    try {
+      final enabled = await BillNotificationService.instance.hasPermission();
+      if (!mounted) return;
+      setState(() => _remindersEnabled = enabled);
+      if (enabled) await _refreshReminders();
+    } catch (_) {
+      // Reminder setup should not prevent bill management from working.
+    }
+  }
+
+  Future<void> _refreshReminders() async {
+    final bills = await widget.database.watchBills().first;
+    await BillNotificationService.instance.syncBills(bills);
+  }
+
+  Future<void> _enableReminders() async {
+    try {
+      final granted = await BillNotificationService.instance.requestPermission();
+      if (!mounted) return;
+      if (!granted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(
+            'Izin notifikasi belum diberikan. Aktifkan melalui pengaturan aplikasi Android.',
+          )),
+        );
+        return;
+      }
+      setState(() => _remindersEnabled = true);
+      await _refreshReminders();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(
+          'Pengingat tagihan aktif: satu hari sebelum dan pada hari jatuh tempo.',
+        )),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal mengaktifkan pengingat: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _addBill() async {
     final title = TextEditingController();
     final amount = TextEditingController();
@@ -843,6 +897,7 @@ class _BillsSectionState extends State<BillsSection> {
                     dueDate: dueDate,
                     isMonthly: monthly,
                   );
+                  await _refreshReminders();
                   if (dialogContext.mounted) Navigator.pop(dialogContext);
                 } catch (e) {
                   if (dialogContext.mounted) {
@@ -907,6 +962,7 @@ class _BillsSectionState extends State<BillsSection> {
         billId: bill.id,
         accountId: selected,
       );
+      await _refreshReminders();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -928,6 +984,13 @@ class _BillsSectionState extends State<BillsSection> {
             Expanded(
               child: Text('Tagihan & jatuh tempo',
                 style: Theme.of(context).textTheme.titleLarge),
+            ),
+            IconButton(
+              tooltip: _remindersEnabled ? 'Pengingat aktif' : 'Aktifkan pengingat',
+              onPressed: _remindersEnabled ? null : _enableReminders,
+              icon: Icon(
+                _remindersEnabled ? Icons.notifications_active : Icons.notifications_none,
+              ),
             ),
             IconButton(
               tooltip: 'Tambah tagihan',
@@ -1021,7 +1084,10 @@ class _BillsSectionState extends State<BillsSection> {
                       ),
                       trailing: IconButton(
                         tooltip: 'Hapus tagihan',
-                        onPressed: () => widget.database.deleteBill(bill.id),
+                        onPressed: () async {
+                          await widget.database.deleteBill(bill.id);
+                          await _refreshReminders();
+                        },
                         icon: const Icon(Icons.delete_outline),
                       ),
                     ),
