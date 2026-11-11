@@ -26,7 +26,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -44,6 +44,9 @@ class AppDatabase extends _$AppDatabase {
       if (from < 4) {
         await m.createTable(debts);
         await m.createTable(debtPayments);
+      }
+      if (from < 5) {
+        await m.addColumn(bills, bills.recurrenceEndDate);
       }
     },
     beforeOpen: (details) async {
@@ -166,19 +169,30 @@ class AppDatabase extends _$AppDatabase {
     required int amount,
     required DateTime dueDate,
     required bool isMonthly,
+    DateTime? repeatUntil,
   }) async {
-    if (title.trim().isEmpty || category.trim().isEmpty || amount <= 0) {
-      throw ArgumentError('Data tagihan tidak valid.');
+    if (title.trim().isEmpty || category.trim().isEmpty || amount <= 0) throw ArgumentError('Data tagihan tidak valid.');
+    final start = DateTime(dueDate.year, dueDate.month, dueDate.day);
+    final end = repeatUntil == null ? null : DateTime(repeatUntil.year, repeatUntil.month, repeatUntil.day);
+    if (end != null && end.isBefore(start)) throw ArgumentError('Batas akhir pengulangan tidak boleh sebelum tanggal mulai.');
+    if (end != null && !isMonthly) throw ArgumentError('Batas akhir hanya berlaku untuk tagihan bulanan.');
+    final now = DateTime.now();
+    DateTime occurrence(int year, int month, int day) {
+      final lastDay = DateTime(year, month + 1, 0).day;
+      return DateTime(year, month, day > lastDay ? lastDay : day);
     }
-    await into(bills).insert(BillsCompanion.insert(
-      id: _uuid.v4(),
-      title: title.trim(),
-      category: category.trim(),
-      amount: amount,
-      dueDate: DateTime(dueDate.year, dueDate.month, dueDate.day),
-      isMonthly: Value(isMonthly),
-      createdAt: DateTime.now(),
-    ));
+    await transaction(() async {
+      var current = start;
+      while (true) {
+        await into(bills).insert(BillsCompanion.insert(
+          id: _uuid.v4(), title: title.trim(), category: category.trim(), amount: amount,
+          dueDate: current, isMonthly: Value(isMonthly), recurrenceEndDate: Value(end), createdAt: now,
+        ));
+        if (!isMonthly || end == null || (current.year == end.year && current.month == end.month)) break;
+        current = occurrence(current.year, current.month + 1, start.day);
+        if (current.isAfter(end)) break;
+      }
+    });
   }
 
   Future<void> markBillPaid({
@@ -217,7 +231,7 @@ class AppDatabase extends _$AppDatabase {
         BillsCompanion(isPaid: const Value(true), paidAt: Value(now)),
       );
 
-      if (bill.isMonthly) {
+      if (bill.isMonthly && bill.recurrenceEndDate == null) {
         final nextMonth = DateTime(bill.dueDate.year, bill.dueDate.month + 1);
         final lastDay = DateTime(nextMonth.year, nextMonth.month + 1, 0).day;
         final nextDueDate = DateTime(
@@ -487,6 +501,7 @@ class AppDatabase extends _$AppDatabase {
         'id': row.id, 'title': row.title, 'category': row.category,
         'amount': row.amount, 'dueDate': row.dueDate.toIso8601String(),
         'isPaid': row.isPaid, 'isMonthly': row.isMonthly,
+        'recurrenceEndDate': row.recurrenceEndDate?.toIso8601String(),
         'paidAt': row.paidAt?.toIso8601String(),
         'createdAt': row.createdAt.toIso8601String(),
       }).toList(),
@@ -629,6 +644,7 @@ class AppDatabase extends _$AppDatabase {
           dueDate: date(row, 'dueDate'),
           isPaid: Value(boolean(row, 'isPaid')),
           isMonthly: Value(boolean(row, 'isMonthly')),
+          recurrenceEndDate: Value(row['recurrenceEndDate'] is String ? DateTime.parse(row['recurrenceEndDate'] as String) : null),
           paidAt: Value(paidAt is String ? DateTime.parse(paidAt) : null),
           createdAt: date(row, 'createdAt'),
         ));
