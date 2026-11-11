@@ -112,6 +112,8 @@ class DashboardScreen extends ConsumerWidget {
               const SizedBox(height: 24),
               BillsSection(database: db),
               const SizedBox(height: 24),
+              DebtSection(database: db),
+              const SizedBox(height: 24),
               BudgetSection(database: db),
               const SizedBox(height: 24),
               FinanceReportsSection(database: db),
@@ -746,6 +748,238 @@ class _BackupSectionState extends State<BackupSection> {
       if (_busy) const Padding(
         padding: EdgeInsets.only(top: 8),
         child: LinearProgressIndicator(),
+      ),
+    ],
+  );
+}
+
+
+class DebtSection extends StatefulWidget {
+  const DebtSection({super.key, required this.database});
+
+  final AppDatabase database;
+
+  @override
+  State<DebtSection> createState() => _DebtSectionState();
+}
+
+class _DebtSectionState extends State<DebtSection> {
+  Future<void> _addDebt(String direction) async {
+    final party = TextEditingController();
+    final title = TextEditingController();
+    final amount = TextEditingController();
+    final notes = TextEditingController();
+    DateTime? dueDate;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(direction == 'payable' ? 'Catat utang' : 'Catat piutang'),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(
+                controller: party,
+                decoration: InputDecoration(
+                  labelText: direction == 'payable' ? 'Nama pemberi pinjaman' : 'Nama peminjam',
+                ),
+              ),
+              TextField(controller: title, decoration: const InputDecoration(labelText: 'Keterangan')),
+              TextField(
+                controller: amount,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Total nominal (Rp)'),
+              ),
+              TextField(controller: notes, decoration: const InputDecoration(labelText: 'Catatan (opsional)')),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Jatuh tempo (opsional)'),
+                subtitle: Text(dueDate == null
+                    ? 'Belum ditentukan'
+                    : DateFormat('dd MMMM yyyy', 'id_ID').format(dueDate!)),
+                trailing: const Icon(Icons.calendar_month),
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: dialogContext,
+                    initialDate: dueDate ?? DateTime.now(),
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime(2100),
+                  );
+                  if (picked != null) setDialogState(() => dueDate = picked);
+                },
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final value = int.tryParse(amount.text.replaceAll('.', '').replaceAll(',', '')) ?? 0;
+                try {
+                  await widget.database.addDebt(
+                    direction: direction,
+                    partyName: party.text,
+                    title: title.text,
+                    amount: value,
+                    dueDate: dueDate,
+                    notes: notes.text,
+                  );
+                  if (dialogContext.mounted) Navigator.pop(dialogContext);
+                } catch (e) {
+                  if (dialogContext.mounted) {
+                    ScaffoldMessenger.of(dialogContext).showSnackBar(
+                      SnackBar(content: Text(e.toString())),
+                    );
+                  }
+                }
+              },
+              child: const Text('Simpan'),
+            ),
+          ],
+        ),
+      ),
+    );
+    party.dispose();
+    title.dispose();
+    amount.dispose();
+    notes.dispose();
+  }
+
+  Future<void> _payDebt(Debt debt, int remaining) async {
+    final accounts = await widget.database.watchAccounts().first;
+    if (!mounted) return;
+    if (accounts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tambahkan rekening terlebih dahulu.')),
+      );
+      return;
+    }
+    final amount = TextEditingController(text: remaining.toString());
+    String accountId = accounts.first.id;
+    final value = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(debt.direction == 'payable' ? 'Bayar utang' : 'Terima pembayaran piutang'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text('Sisa: ${_rupiah.format(remaining)}'),
+            TextField(
+              controller: amount,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Nominal pembayaran (Rp)'),
+            ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              initialValue: accountId,
+              decoration: const InputDecoration(labelText: 'Rekening'),
+              items: accounts.map((a) => DropdownMenuItem(value: a.id, child: Text(a.name))).toList(),
+              onChanged: (v) => setDialogState(() => accountId = v ?? accountId),
+            ),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Batal')),
+            FilledButton(
+              onPressed: () {
+                final parsed = int.tryParse(amount.text.replaceAll('.', '').replaceAll(',', '')) ?? 0;
+                Navigator.pop(dialogContext, parsed);
+              },
+              child: const Text('Simpan pembayaran'),
+            ),
+          ],
+        ),
+      ),
+    );
+    amount.dispose();
+    if (value == null || value <= 0) return;
+    try {
+      await widget.database.addDebtPayment(
+        debtId: debt.id,
+        accountId: accountId,
+        amount: value,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
+        children: [
+          Expanded(
+            child: Text('Utang & piutang', style: Theme.of(context).textTheme.titleLarge),
+          ),
+          IconButton(
+            tooltip: 'Tambah utang',
+            onPressed: () => _addDebt('payable'),
+            icon: const Icon(Icons.call_made),
+          ),
+          IconButton(
+            tooltip: 'Tambah piutang',
+            onPressed: () => _addDebt('receivable'),
+            icon: const Icon(Icons.call_received),
+          ),
+        ],
+      ),
+      StreamBuilder<List<Debt>>(
+        stream: widget.database.watchDebts(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) return const Text('Data utang/piutang tidak dapat dimuat.');
+          final items = snapshot.data ?? [];
+          if (items.isEmpty) {
+            return const Card(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('Belum ada catatan utang atau piutang.'),
+              ),
+            );
+          }
+          return Column(
+            children: items.map((debt) => FutureBuilder<int>(
+              future: widget.database.debtRemaining(debt.id),
+              builder: (context, balance) {
+                final remaining = balance.data ?? debt.amount;
+                final paid = remaining == 0;
+                final overdue = debt.dueDate != null &&
+                    DateTime(debt.dueDate!.year, debt.dueDate!.month, debt.dueDate!.day)
+                        .isBefore(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)) &&
+                    !paid;
+                return Card(
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      child: Icon(debt.direction == 'payable' ? Icons.call_made : Icons.call_received),
+                    ),
+                    title: Text(debt.title),
+                    subtitle: Text(
+                      '${debt.partyName} • ${debt.direction == 'payable' ? 'Utang' : 'Piutang'}'
+                      '${debt.dueDate == null ? '' : ' • Jatuh tempo ${DateFormat('dd MMM yyyy', 'id_ID').format(debt.dueDate!)}'}'
+                      '${overdue ? ' • TERLAMBAT' : ''}'
+                      '
+Total ${_rupiah.format(debt.amount)} • Sisa ${_rupiah.format(remaining)}',
+                    ),
+                    isThreeLine: true,
+                    trailing: paid
+                        ? const Icon(Icons.check_circle, color: Colors.green)
+                        : TextButton(
+                            onPressed: balance.connectionState == ConnectionState.done
+                                ? () => _payDebt(debt, remaining)
+                                : null,
+                            child: const Text('Bayar'),
+                          ),
+                  ),
+                );
+              },
+            )).toList(),
+          );
+        },
       ),
     ],
   );
