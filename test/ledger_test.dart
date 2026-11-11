@@ -201,6 +201,51 @@ void main() {
     expect(next.dueDate, DateTime(2026, 2, 28));
   });
 
+  test('JSON backup restores accounts transactions budgets and bills', () async {
+    await db.addAccount('Bank', 'Bank', 500000);
+    final account = (await db.watchAccounts().first).single;
+    await db.addIncome(
+      accountId: account.id,
+      amount: 200000,
+      title: 'Gaji',
+      category: 'Gaji',
+    );
+    await db.saveBudget(
+      category: 'Makanan',
+      monthlyLimit: 1000000,
+      month: DateTime(2026, 11),
+    );
+    await db.addBill(
+      title: 'Internet',
+      category: 'Tagihan',
+      amount: 150000,
+      dueDate: DateTime(2026, 11, 30),
+      isMonthly: true,
+    );
+
+    final backup = await db.exportBackupJson();
+    await db.restoreBackupJson(backup);
+
+    final restoredAccount = (await db.watchAccounts().first).single;
+    expect(restoredAccount.name, 'Bank');
+    expect(await db.balanceFor(restoredAccount.id), 700000);
+    expect((await db.watchTransactions().first), hasLength(1));
+    expect((await db.watchBudgetsForMonth(DateTime(2026, 11)).first), hasLength(1));
+    expect((await db.watchBills().first), hasLength(1));
+  });
+
+  test('invalid backup format is rejected without replacing existing data', () async {
+    await db.addAccount('Cash', 'Cash', 100000);
+
+    await expectLater(
+      db.restoreBackupJson('{"format":"unknown","version":1}'),
+      throwsFormatException,
+    );
+
+    expect((await db.watchAccounts().first).single.name, 'Cash');
+    expect(await db.watchTotalBalance().first, 100000);
+  });
+
   test('invalid amount is rejected', () async {
     await db.addAccount('Tunai', 'Tunai', 0);
     final account = (await db.watchAccounts().first).single;
