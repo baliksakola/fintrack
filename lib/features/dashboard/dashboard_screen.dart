@@ -103,6 +103,8 @@ class DashboardScreen extends ConsumerWidget {
                 },
               ),
               const SizedBox(height: 24),
+              BillsSection(database: db),
+              const SizedBox(height: 24),
               BudgetSection(database: db),
               const SizedBox(height: 24),
               FinanceReportsSection(database: db),
@@ -540,6 +542,294 @@ class _TransactionHistorySectionState extends State<TransactionHistorySection> {
 
 
 
+
+
+
+class BillsSection extends StatefulWidget {
+  const BillsSection({super.key, required this.database});
+
+  final AppDatabase database;
+
+  @override
+  State<BillsSection> createState() => _BillsSectionState();
+}
+
+class _BillsSectionState extends State<BillsSection> {
+  Future<void> _addBill() async {
+    final title = TextEditingController();
+    final amount = TextEditingController();
+    String category = _expenseCategories.first;
+    bool monthly = true;
+    DateTime dueDate = DateTime.now();
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Tambah tagihan'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: title,
+                  decoration: const InputDecoration(labelText: 'Nama tagihan'),
+                ),
+                TextField(
+                  controller: amount,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Nominal (Rp)'),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: category,
+                  decoration: const InputDecoration(labelText: 'Kategori'),
+                  items: _expenseCategories.map((value) => DropdownMenuItem(
+                    value: value, child: Text(value),
+                  )).toList(),
+                  onChanged: (value) => setDialogState(
+                    () => category = value ?? category,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Tanggal jatuh tempo'),
+                  subtitle: Text(DateFormat('dd MMMM yyyy', 'id_ID').format(dueDate)),
+                  trailing: const Icon(Icons.calendar_month),
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: dialogContext,
+                      initialDate: dueDate,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2100),
+                    );
+                    if (picked != null) {
+                      setDialogState(() => dueDate = picked);
+                    }
+                  },
+                ),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: monthly,
+                  title: const Text('Tagihan berulang setiap bulan'),
+                  onChanged: (value) => setDialogState(
+                    () => monthly = value ?? false,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final value = int.tryParse(
+                  amount.text.replaceAll('.', '').replaceAll(',', ''),
+                ) ?? 0;
+                try {
+                  await widget.database.addBill(
+                    title: title.text,
+                    category: category,
+                    amount: value,
+                    dueDate: dueDate,
+                    isMonthly: monthly,
+                  );
+                  if (dialogContext.mounted) Navigator.pop(dialogContext);
+                } catch (e) {
+                  if (dialogContext.mounted) {
+                    ScaffoldMessenger.of(dialogContext).showSnackBar(
+                      SnackBar(content: Text(e.toString())),
+                    );
+                  }
+                }
+              },
+              child: const Text('Simpan tagihan'),
+            ),
+          ],
+        ),
+      ),
+    );
+    title.dispose();
+    amount.dispose();
+  }
+
+  Future<void> _payBill(Bill bill) async {
+    final accounts = await widget.database.watchAccounts().first;
+    if (!mounted) return;
+    if (accounts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tambahkan rekening sebelum membayar tagihan.')),
+      );
+      return;
+    }
+    String accountId = accounts.first.id;
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Bayar tagihan'),
+          content: DropdownButtonFormField<String>(
+            initialValue: accountId,
+            decoration: const InputDecoration(labelText: 'Bayar menggunakan rekening'),
+            items: accounts.map((account) => DropdownMenuItem(
+              value: account.id,
+              child: Text(account.name),
+            )).toList(),
+            onChanged: (value) => setDialogState(
+              () => accountId = value ?? accountId,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, accountId),
+              child: const Text('Konfirmasi pembayaran'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (selected == null) return;
+    try {
+      await widget.database.markBillPaid(
+        billId: bill.id,
+        accountId: selected,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text('Tagihan & jatuh tempo',
+                style: Theme.of(context).textTheme.titleLarge),
+            ),
+            IconButton(
+              tooltip: 'Tambah tagihan',
+              onPressed: _addBill,
+              icon: const Icon(Icons.add),
+            ),
+          ],
+        ),
+        StreamBuilder<List<Bill>>(
+          stream: widget.database.watchBills(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return const Text('Tagihan tidak dapat dimuat.');
+            }
+            final items = snapshot.data ?? [];
+            if (items.isEmpty) {
+              return const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('Belum ada tagihan. Tambahkan listrik, internet, cicilan, atau tagihan rutin lainnya.'),
+                ),
+              );
+            }
+            final unpaid = items.where((bill) => !bill.isPaid).toList();
+            final paid = items.where((bill) => bill.isPaid).toList();
+            return Column(
+              children: [
+                if (unpaid.isEmpty)
+                  const Card(
+                    child: Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Text('Tidak ada tagihan yang menunggu pembayaran.'),
+                    ),
+                  ),
+                ...unpaid.map((bill) {
+                  final due = DateTime(
+                    bill.dueDate.year, bill.dueDate.month, bill.dueDate.day,
+                  );
+                  final days = due.difference(todayDate).inDays;
+                  final overdue = days < 0;
+                  final nearDue = days >= 0 && days <= 3;
+                  final color = overdue ? Colors.red : nearDue ? Colors.orange : Colors.green;
+                  final status = overdue
+                      ? 'Terlambat ${days.abs()} hari'
+                      : days == 0
+                          ? 'Jatuh tempo hari ini'
+                          : 'Jatuh tempo ${days} hari lagi';
+                  return Card(
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: color.withValues(alpha: 0.12),
+                        child: Icon(
+                          overdue ? Icons.warning_amber_rounded : Icons.receipt_long,
+                          color: color,
+                        ),
+                      ),
+                      title: Text(bill.title),
+                      subtitle: Text(
+                        '${bill.category} • ${DateFormat('dd MMM yyyy', 'id_ID').format(bill.dueDate)}\n$status${bill.isMonthly ? ' • Bulanan' : ''}',
+                        style: TextStyle(color: color),
+                      ),
+                      isThreeLine: true,
+                      trailing: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Flexible(child: Text(_rupiah.format(bill.amount),
+                            style: const TextStyle(fontWeight: FontWeight.w600))),
+                          TextButton(
+                            onPressed: () => _payBill(bill),
+                            child: const Text('Bayar'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+                if (paid.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Riwayat tagihan lunas',
+                      style: Theme.of(context).textTheme.titleMedium),
+                  ),
+                  ...paid.take(5).map((bill) => Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.check_circle, color: Colors.green),
+                      title: Text(bill.title),
+                      subtitle: Text(
+                        '${DateFormat('dd MMM yyyy', 'id_ID').format(bill.dueDate)} • Lunas ${bill.paidAt == null ? '' : DateFormat('dd MMM yyyy', 'id_ID').format(bill.paidAt!)}',
+                      ),
+                      trailing: IconButton(
+                        tooltip: 'Hapus tagihan',
+                        onPressed: () => widget.database.deleteBill(bill.id),
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                    ),
+                  )),
+                ],
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
 
 class BudgetSection extends StatefulWidget {
   const BudgetSection({super.key, required this.database});
