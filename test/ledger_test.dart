@@ -54,8 +54,8 @@ void main() {
     await db.addAccount('Tunai', 'Tunai', 0);
     final account = (await db.watchAccounts().first).single;
 
-    expect(
-      () => db.addExpense(accountId: account.id, amount: 0, title: 'Invalid'),
+    await expectLater(
+      db.addExpense(accountId: account.id, amount: 0, title: 'Invalid'),
       throwsArgumentError,
     );
   });
