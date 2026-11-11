@@ -103,6 +103,8 @@ class DashboardScreen extends ConsumerWidget {
                 },
               ),
               const SizedBox(height: 24),
+              BudgetSection(database: db),
+              const SizedBox(height: 24),
               FinanceReportsSection(database: db),
               const SizedBox(height: 24),
               TransactionHistorySection(database: db),
@@ -536,6 +538,239 @@ class _TransactionHistorySectionState extends State<TransactionHistorySection> {
   }
 }
 
+
+
+
+class BudgetSection extends StatefulWidget {
+  const BudgetSection({super.key, required this.database});
+
+  final AppDatabase database;
+
+  @override
+  State<BudgetSection> createState() => _BudgetSectionState();
+}
+
+class _BudgetSectionState extends State<BudgetSection> {
+  DateTime _month = DateTime(DateTime.now().year, DateTime.now().month);
+
+  String get _monthLabel => DateFormat('MMMM yyyy', 'id_ID').format(_month);
+
+  Future<void> _showBudgetDialog({Budget? existing}) async {
+    final amount = TextEditingController(
+      text: existing == null ? '' : existing.monthlyLimit.toString(),
+    );
+    String category = existing?.category ?? _expenseCategories.first;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(existing == null ? 'Tambah anggaran' : 'Ubah anggaran'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: category,
+                decoration: const InputDecoration(labelText: 'Kategori'),
+                items: _expenseCategories.map((value) => DropdownMenuItem(
+                  value: value,
+                  child: Text(value),
+                )).toList(),
+                onChanged: existing == null
+                    ? (value) => setDialogState(() => category = value ?? category)
+                    : null,
+              ),
+              TextField(
+                controller: amount,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Batas per bulan (Rp)'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final limit = int.tryParse(
+                  amount.text.replaceAll('.', '').replaceAll(',', ''),
+                ) ?? 0;
+                try {
+                  await widget.database.saveBudget(
+                    category: category,
+                    monthlyLimit: limit,
+                    month: _month,
+                  );
+                  if (dialogContext.mounted) Navigator.pop(dialogContext);
+                } catch (e) {
+                  if (dialogContext.mounted) {
+                    ScaffoldMessenger.of(dialogContext).showSnackBar(
+                      SnackBar(content: Text(e.toString())),
+                    );
+                  }
+                }
+              },
+              child: const Text('Simpan'),
+            ),
+          ],
+        ),
+      ),
+    );
+    amount.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text('Anggaran bulanan',
+                style: Theme.of(context).textTheme.titleLarge),
+            ),
+            IconButton(
+              tooltip: 'Bulan sebelumnya',
+              onPressed: () => setState(() {
+                _month = DateTime(_month.year, _month.month - 1);
+              }),
+              icon: const Icon(Icons.chevron_left),
+            ),
+            IconButton(
+              tooltip: 'Bulan berikutnya',
+              onPressed: () => setState(() {
+                _month = DateTime(_month.year, _month.month + 1);
+              }),
+              icon: const Icon(Icons.chevron_right),
+            ),
+          ],
+        ),
+        Text(_monthLabel, style: Theme.of(context).textTheme.bodyMedium),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () => _showBudgetDialog(),
+            icon: const Icon(Icons.add),
+            label: const Text('Tambah anggaran kategori'),
+          ),
+        ),
+        StreamBuilder<List<Budget>>(
+          stream: widget.database.watchBudgetsForMonth(_month),
+          builder: (context, budgetSnapshot) {
+            if (budgetSnapshot.hasError) {
+              return const Text('Anggaran tidak dapat dimuat.');
+            }
+            final budgets = budgetSnapshot.data ?? [];
+            return StreamBuilder<List<FinanceTransaction>>(
+              stream: widget.database.watchTransactions(),
+              builder: (context, transactionSnapshot) {
+                final expenses = (transactionSnapshot.data ?? []).where((tx) =>
+                  tx.type == 'expense' &&
+                  tx.occurredAt.year == _month.year &&
+                  tx.occurredAt.month == _month.month
+                );
+                final spentByCategory = <String, int>{};
+                for (final tx in expenses) {
+                  final category = (tx.category == null || tx.category!.isEmpty)
+                      ? 'Tanpa kategori'
+                      : tx.category!;
+                  spentByCategory[category] =
+                      (spentByCategory[category] ?? 0) + tx.amount;
+                }
+                if (budgets.isEmpty) {
+                  return const Card(
+                    child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text('Belum ada anggaran. Tambahkan batas pengeluaran untuk kategori yang ingin dikendalikan.'),
+                    ),
+                  );
+                }
+                final totalLimit = budgets.fold<int>(
+                  0, (sum, budget) => sum + budget.monthlyLimit,
+                );
+                final totalSpent = budgets.fold<int>(
+                  0,
+                  (sum, budget) =>
+                    sum + (spentByCategory[budget.category] ?? 0),
+                );
+                return Column(
+                  children: [
+                    Card(
+                      child: ListTile(
+                        title: const Text('Total anggaran kategori'),
+                        subtitle: Text('Terpakai: ${_rupiah.format(totalSpent)}'),
+                        trailing: Text(_rupiah.format(totalLimit),
+                          style: const TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                    ...budgets.map((budget) {
+                      final spent = spentByCategory[budget.category] ?? 0;
+                      final ratio = spent / budget.monthlyLimit;
+                      final exceeded = spent > budget.monthlyLimit;
+                      final nearLimit = ratio >= 0.8;
+                      final color = exceeded
+                          ? Colors.red
+                          : nearLimit ? Colors.orange : Colors.green;
+                      return Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(budget.category,
+                                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Ubah anggaran',
+                                    onPressed: () => _showBudgetDialog(existing: budget),
+                                    icon: const Icon(Icons.edit_outlined),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Hapus anggaran',
+                                    onPressed: () async {
+                                      await widget.database.deleteBudget(budget.id);
+                                    },
+                                    icon: const Icon(Icons.delete_outline),
+                                  ),
+                                ],
+                              ),
+                              Text('${_rupiah.format(spent)} dari ${_rupiah.format(budget.monthlyLimit)}'),
+                              const SizedBox(height: 8),
+                              LinearProgressIndicator(
+                                value: ratio.clamp(0.0, 1.0).toDouble(),
+                                color: color,
+                                minHeight: 8,
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                exceeded
+                                    ? 'Melebihi anggaran ${_rupiah.format(spent - budget.monthlyLimit)}'
+                                    : nearLimit
+                                        ? 'Peringatan: anggaran sudah terpakai ${(ratio * 100).round()}%'
+                                        : 'Terpakai ${(ratio * 100).round()}%',
+                                style: TextStyle(color: color, fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+                  ],
+                );
+              },
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
 
 class FinanceReportsSection extends StatefulWidget {
   const FinanceReportsSection({super.key, required this.database});
