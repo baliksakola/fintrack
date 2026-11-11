@@ -50,6 +50,66 @@ void main() {
     expect(await db.watchTotalBalance().first, 250000);
   });
 
+  test('editing income updates ledger and account balance', () async {
+    await db.addAccount('BNI', 'Bank', 100000);
+    await db.addAccount('Tunai', 'Tunai', 0);
+    final accounts = await db.watchAccounts().first;
+    await db.addIncome(
+      accountId: accounts.first.id,
+      amount: 50000,
+      title: 'Honor',
+    );
+    final tx = (await db.watchTransactions().first).single;
+
+    await db.updateTransaction(
+      transactionId: tx.id,
+      accountId: accounts.last.id,
+      amount: 75000,
+      title: 'Honor revisi',
+    );
+
+    expect(await db.balanceFor(accounts.first.id), 100000);
+    expect(await db.balanceFor(accounts.last.id), 75000);
+    final updated = (await db.watchTransactions().first).single;
+    expect(updated.title, 'Honor revisi');
+    expect(updated.accountId, accounts.last.id);
+  });
+
+  test('deleting expense restores account balance', () async {
+    await db.addAccount('Tunai', 'Tunai', 100000);
+    final account = (await db.watchAccounts().first).single;
+    await db.addExpense(
+      accountId: account.id,
+      amount: 25000,
+      title: 'Belanja',
+    );
+    final tx = (await db.watchTransactions().first).single;
+
+    await db.deleteTransaction(tx.id);
+
+    expect(await db.balanceFor(account.id), 100000);
+    expect(await db.watchTransactions().first, isEmpty);
+  });
+
+  test('deleting transfer removes both ledger entries', () async {
+    await db.addAccount('BNI', 'Bank', 100000);
+    await db.addAccount('Tunai', 'Tunai', 0);
+    final accounts = await db.watchAccounts().first;
+    await db.createTransfer(
+      fromAccountId: accounts.first.id,
+      toAccountId: accounts.last.id,
+      amount: 30000,
+      title: 'Pindah uang',
+    );
+    final tx = (await db.watchTransactions().first).single;
+
+    await db.deleteTransaction(tx.id);
+
+    expect(await db.balanceFor(accounts.first.id), 100000);
+    expect(await db.balanceFor(accounts.last.id), 0);
+    expect(await db.watchTransactions().first, isEmpty);
+  });
+
   test('invalid amount is rejected', () async {
     await db.addAccount('Tunai', 'Tunai', 0);
     final account = (await db.watchAccounts().first).single;
