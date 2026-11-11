@@ -27,6 +27,7 @@ Aplikasi Android pengelolaan keuangan pribadi dengan pendekatan **local-first**.
 - Backup seluruh data ke file terenkripsi AES-256-GCM dengan kata sandi.
 - Pemulihan backup terenkripsi dengan validasi integritas file dan kata sandi.
 - Pembayaran tagihan otomatis dicatat sebagai transaksi pengeluaran dan mengurangi saldo rekening.
+- Pencatatan utang dan piutang dengan pembayaran bertahap serta perhitungan sisa otomatis.
 - Laporan pemasukan/pengeluaran, grafik 7 hari, dan rekap kategori.
 - Ledger untuk menghitung saldo rekening.
 - Test dasar untuk pemasukan, pengeluaran, transfer, dan validasi nominal.
@@ -64,4 +65,4 @@ test/                  # Pengujian ledger
 ```
 
 ## Catatan pengembangan
-Source saat ini adalah implementasi inti tahap awal. Fitur biaya transfer, notifikasi push jatuh tempo, cicilan, utang/piutang, aset, kalender, backup terenkripsi dan sinkronisasi cloud masih masuk roadmap dan tidak boleh dianggap tersedia sebelum diimplementasikan serta diuji.
+Source saat ini adalah implementasi inti tahap awal. Fitur biaya transfer, notifikasi push jatuh tempo, cicilan, aset, kalender, backup terenkripsi dan sinkronisasi cloud masih masuk roadmap dan tidak boleh dianggap tersedia sebelum diimplementasikan serta diuji.
