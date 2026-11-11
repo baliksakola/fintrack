@@ -124,10 +124,44 @@ class DashboardScreen extends ConsumerWidget {
                           ),
                           title: Text(tx.title),
                           subtitle: Text(DateFormat('dd MMM yyyy, HH:mm', 'id_ID').format(tx.occurredAt)),
-                          trailing: Text(
-                            '${income ? '+' : transfer ? '' : '-'}${_rupiah.format(tx.amount)}',
-                            style: TextStyle(fontWeight: FontWeight.w600,
-                              color: income ? Colors.green : transfer ? null : Colors.red),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '${income ? '+' : transfer ? '' : '-'}${_rupiah.format(tx.amount)}',
+                                style: TextStyle(fontWeight: FontWeight.w600,
+                                  color: income ? Colors.green : transfer ? null : Colors.red),
+                              ),
+                              PopupMenuButton<String>(
+                                tooltip: 'Aksi transaksi',
+                                onSelected: (action) {
+                                  if (action == 'edit' && !transfer) {
+                                    _showEditTransactionDialog(context, db, tx);
+                                  } else if (action == 'delete') {
+                                    _confirmDeleteTransaction(context, db, tx);
+                                  }
+                                },
+                                itemBuilder: (context) => [
+                                  if (!transfer)
+                                    const PopupMenuItem(
+                                      value: 'edit',
+                                      child: ListTile(
+                                        dense: true,
+                                        leading: Icon(Icons.edit_outlined),
+                                        title: Text('Edit'),
+                                      ),
+                                    ),
+                                  const PopupMenuItem(
+                                    value: 'delete',
+                                    child: ListTile(
+                                      dense: true,
+                                      leading: Icon(Icons.delete_outline),
+                                      title: Text('Hapus'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                         ),
                       );
@@ -282,4 +316,115 @@ Future<void> _showTransferDialog(BuildContext context, AppDatabase db) async {
       ],
     ),
   ));
+}
+ 
+Future<void> _showEditTransactionDialog(
+  BuildContext context,
+  AppDatabase db,
+  FinanceTransaction transaction,
+) async {
+  final accounts = await db.watchAccounts().first;
+  if (!context.mounted || accounts.isEmpty) return;
+  final title = TextEditingController(text: transaction.title);
+  final amount = TextEditingController(text: transaction.amount.toString());
+  String accountId = accounts.any((a) => a.id == transaction.accountId)
+      ? transaction.accountId
+      : accounts.first.id;
+
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: Text(transaction.type == 'income' ? 'Edit pemasukan' : 'Edit pengeluaran'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: title,
+              decoration: const InputDecoration(labelText: 'Keterangan'),
+            ),
+            TextField(
+              controller: amount,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Nominal (Rp)'),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: accountId,
+              items: accounts.map((a) => DropdownMenuItem(
+                value: a.id,
+                child: Text(a.name),
+              )).toList(),
+              onChanged: (value) => setState(() => accountId = value ?? accountId),
+              decoration: const InputDecoration(labelText: 'Rekening'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final value = int.tryParse(
+                amount.text.replaceAll('.', '').replaceAll(',', ''),
+              ) ?? 0;
+              try {
+                await db.updateTransaction(
+                  transactionId: transaction.id,
+                  accountId: accountId,
+                  amount: value,
+                  title: title.text,
+                );
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
+              } catch (e) {
+                if (dialogContext.mounted) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    SnackBar(content: Text(e.toString())),
+                  );
+                }
+              }
+            },
+            child: const Text('Simpan perubahan'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+Future<void> _confirmDeleteTransaction(
+  BuildContext context,
+  AppDatabase db,
+  FinanceTransaction transaction,
+) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Hapus transaksi?'),
+      content: Text('Transaksi "${transaction.title}" akan dihapus dan saldo rekening akan disesuaikan.'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: const Text('Batal'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: Theme.of(dialogContext).colorScheme.error),
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: const Text('Hapus'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true || !context.mounted) return;
+  try {
+    await db.deleteTransaction(transaction.id);
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    }
+  }
 }
