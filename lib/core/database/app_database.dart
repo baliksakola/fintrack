@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -331,6 +332,164 @@ class AppDatabase extends _$AppDatabase {
       readsFrom: {ledgerEntries},
     ).getSingle();
     return account.openingBalance + total.read<int>('total');
+  }
+
+  Future<String> exportBackupJson() async {
+    final backup = <String, dynamic>{
+      'format': 'fintrack-backup',
+      'version': 1,
+      'createdAt': DateTime.now().toIso8601String(),
+      'accounts': (await select(accounts).get()).map((row) => {
+        'id': row.id, 'name': row.name, 'type': row.type,
+        'openingBalance': row.openingBalance, 'archived': row.archived,
+        'createdAt': row.createdAt.toIso8601String(),
+      }).toList(),
+      'financeTransactions': (await select(financeTransactions).get()).map((row) => {
+        'id': row.id, 'type': row.type, 'accountId': row.accountId,
+        'amount': row.amount, 'title': row.title, 'category': row.category,
+        'occurredAt': row.occurredAt.toIso8601String(),
+        'createdAt': row.createdAt.toIso8601String(),
+      }).toList(),
+      'ledgerEntries': (await select(ledgerEntries).get()).map((row) => {
+        'id': row.id, 'transactionId': row.transactionId,
+        'accountId': row.accountId, 'amountDelta': row.amountDelta,
+        'createdAt': row.createdAt.toIso8601String(),
+      }).toList(),
+      'transfers': (await select(transfers).get()).map((row) => {
+        'id': row.id, 'transactionId': row.transactionId,
+        'fromAccountId': row.fromAccountId, 'toAccountId': row.toAccountId,
+        'createdAt': row.createdAt.toIso8601String(),
+      }).toList(),
+      'budgets': (await select(budgets).get()).map((row) => {
+        'id': row.id, 'category': row.category,
+        'monthlyLimit': row.monthlyLimit,
+        'month': row.month.toIso8601String(),
+        'createdAt': row.createdAt.toIso8601String(),
+      }).toList(),
+      'bills': (await select(bills).get()).map((row) => {
+        'id': row.id, 'title': row.title, 'category': row.category,
+        'amount': row.amount, 'dueDate': row.dueDate.toIso8601String(),
+        'isPaid': row.isPaid, 'isMonthly': row.isMonthly,
+        'paidAt': row.paidAt?.toIso8601String(),
+        'createdAt': row.createdAt.toIso8601String(),
+      }).toList(),
+    };
+    return const JsonEncoder.withIndent('  ').convert(backup);
+  }
+
+  Future<void> restoreBackupJson(String source) async {
+    final decoded = jsonDecode(source);
+    if (decoded is! Map<String, dynamic> ||
+        decoded['format'] != 'fintrack-backup' ||
+        decoded['version'] != 1) {
+      throw const FormatException('Format backup FinTrack tidak dikenali.');
+    }
+
+    List<Map<String, dynamic>> rows(String key) {
+      final value = decoded[key];
+      if (value is! List) throw FormatException('Data $key tidak valid.');
+      return value.map((item) {
+        if (item is! Map) throw FormatException('Baris $key tidak valid.');
+        return Map<String, dynamic>.from(item);
+      }).toList();
+    }
+
+    final accountRows = rows('accounts');
+    final transactionRows = rows('financeTransactions');
+    final ledgerRows = rows('ledgerEntries');
+    final transferRows = rows('transfers');
+    final budgetRows = rows('budgets');
+    final billRows = rows('bills');
+
+    DateTime date(Map<String, dynamic> row, String key) {
+      final value = row[key];
+      if (value is! String) throw FormatException('Tanggal $key tidak valid.');
+      return DateTime.parse(value);
+    }
+
+    String string(Map<String, dynamic> row, String key) {
+      final value = row[key];
+      if (value is! String) throw FormatException('Kolom $key tidak valid.');
+      return value;
+    }
+
+    int integer(Map<String, dynamic> row, String key) {
+      final value = row[key];
+      if (value is! int) throw FormatException('Kolom $key tidak valid.');
+      return value;
+    }
+
+    bool boolean(Map<String, dynamic> row, String key) {
+      final value = row[key];
+      if (value is! bool) throw FormatException('Kolom $key tidak valid.');
+      return value;
+    }
+
+    await transaction(() async {
+      await delete(ledgerEntries).go();
+      await delete(transfers).go();
+      await delete(financeTransactions).go();
+      await delete(budgets).go();
+      await delete(bills).go();
+      await delete(accounts).go();
+
+      for (final row in accountRows) {
+        await into(accounts).insert(AccountsCompanion.insert(
+          id: string(row, 'id'), name: string(row, 'name'),
+          type: string(row, 'type'),
+          openingBalance: Value(integer(row, 'openingBalance')),
+          archived: Value(boolean(row, 'archived')),
+          createdAt: date(row, 'createdAt'),
+        ));
+      }
+      for (final row in transactionRows) {
+        final category = row['category'];
+        await into(financeTransactions).insert(FinanceTransactionsCompanion.insert(
+          id: string(row, 'id'), type: string(row, 'type'),
+          accountId: string(row, 'accountId'), amount: integer(row, 'amount'),
+          title: string(row, 'title'),
+          category: Value(category is String ? category : null),
+          occurredAt: date(row, 'occurredAt'), createdAt: date(row, 'createdAt'),
+        ));
+      }
+      for (final row in ledgerRows) {
+        await into(ledgerEntries).insert(LedgerEntriesCompanion.insert(
+          id: string(row, 'id'),
+          transactionId: string(row, 'transactionId'),
+          accountId: string(row, 'accountId'),
+          amountDelta: integer(row, 'amountDelta'),
+          createdAt: date(row, 'createdAt'),
+        ));
+      }
+      for (final row in transferRows) {
+        await into(transfers).insert(TransfersCompanion.insert(
+          id: string(row, 'id'),
+          transactionId: string(row, 'transactionId'),
+          fromAccountId: string(row, 'fromAccountId'),
+          toAccountId: string(row, 'toAccountId'),
+          createdAt: date(row, 'createdAt'),
+        ));
+      }
+      for (final row in budgetRows) {
+        await into(budgets).insert(BudgetsCompanion.insert(
+          id: string(row, 'id'), category: string(row, 'category'),
+          monthlyLimit: integer(row, 'monthlyLimit'),
+          month: date(row, 'month'), createdAt: date(row, 'createdAt'),
+        ));
+      }
+      for (final row in billRows) {
+        final paidAt = row['paidAt'];
+        await into(bills).insert(BillsCompanion.insert(
+          id: string(row, 'id'), title: string(row, 'title'),
+          category: string(row, 'category'), amount: integer(row, 'amount'),
+          dueDate: date(row, 'dueDate'),
+          isPaid: Value(boolean(row, 'isPaid')),
+          isMonthly: Value(boolean(row, 'isMonthly')),
+          paidAt: Value(paidAt is String ? DateTime.parse(paidAt) : null),
+          createdAt: date(row, 'createdAt'),
+        ));
+      }
+    });
   }
 
   Future<void> closeDatabase() => close();
