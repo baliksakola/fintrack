@@ -176,6 +176,8 @@ class _OverviewPage extends StatelessWidget {
           ),
         ],
       ),
+      const SizedBox(height: 16),
+      _WeeklyCashFlowCard(database: database),
       const SizedBox(height: 20),
       Row(
         children: [
@@ -194,6 +196,189 @@ class _OverviewPage extends StatelessWidget {
       Text('Transaksi terbaru', style: Theme.of(context).textTheme.titleMedium),
       const SizedBox(height: 8),
       _RecentTransactions(database: database),
+    ],
+  );
+}
+
+
+class _WeeklyCashFlowCard extends StatelessWidget {
+  const _WeeklyCashFlowCard({required this.database});
+  final AppDatabase database;
+
+  @override
+  Widget build(BuildContext context) => StreamBuilder<List<FinanceTransaction>>(
+    stream: database.watchTransactions(),
+    builder: (context, snapshot) {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final days = List.generate(7, (index) => today.subtract(Duration(days: 6 - index)));
+      final income = List<int>.filled(7, 0);
+      final expense = List<int>.filled(7, 0);
+
+      for (final tx in snapshot.data ?? <FinanceTransaction>[]) {
+        final date = DateTime(tx.occurredAt.year, tx.occurredAt.month, tx.occurredAt.day);
+        final index = date.difference(days.first).inDays;
+        if (index < 0 || index >= 7) continue;
+        if (tx.type == 'income') income[index] += tx.amount;
+        if (tx.type == 'expense') expense[index] += tx.amount;
+      }
+
+      final totalIncome = income.fold<int>(0, (sum, value) => sum + value);
+      final totalExpense = expense.fold<int>(0, (sum, value) => sum + value);
+      final maxValue = [...income, ...expense].fold<int>(
+        0,
+        (current, value) => value > current ? value : current,
+      );
+      final maxBar = maxValue == 0 ? 1 : maxValue.toDouble();
+      final colors = Theme.of(context).colorScheme;
+
+      return Card(
+        margin: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Arus kas 7 hari', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: _CashFlowTotal(
+                      label: 'Pemasukan',
+                      amount: totalIncome,
+                      color: Colors.green.shade700,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _CashFlowTotal(
+                      label: 'Pengeluaran',
+                      amount: totalExpense,
+                      color: colors.error,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 104,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: List.generate(7, (index) {
+                    final incomeHeight = income[index] / maxBar * 66;
+                    final expenseHeight = expense[index] / maxBar * 66;
+                    return Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Expanded(
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _CashFlowBar(
+                                  height: incomeHeight,
+                                  color: Colors.green.shade600,
+                                ),
+                                const SizedBox(width: 3),
+                                _CashFlowBar(
+                                  height: expenseHeight,
+                                  color: colors.error,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 7),
+                          Text(
+                            DateFormat('EEEEE', 'id_ID').format(days[index]),
+                            style: Theme.of(context).textTheme.labelSmall,
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _CashFlowLegend(color: Colors.green.shade600, label: 'Masuk'),
+                  const SizedBox(width: 18),
+                  _CashFlowLegend(color: colors.error, label: 'Keluar'),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+class _CashFlowTotal extends StatelessWidget {
+  const _CashFlowTotal({
+    required this.label,
+    required this.amount,
+    required this.color,
+  });
+
+  final String label;
+  final int amount;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(label, style: Theme.of(context).textTheme.bodySmall),
+      const SizedBox(height: 3),
+      Text(
+        _rupiah.format(amount),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+          color: color,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    ],
+  );
+}
+
+class _CashFlowBar extends StatelessWidget {
+  const _CashFlowBar({required this.height, required this.color});
+  final double height;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 9,
+    height: height.clamp(2.0, 66.0),
+    decoration: BoxDecoration(
+      color: color,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+    ),
+  );
+}
+
+class _CashFlowLegend extends StatelessWidget {
+  const _CashFlowLegend({required this.color, required this.label});
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(
+        width: 8,
+        height: 8,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      ),
+      const SizedBox(width: 5),
+      Text(label, style: Theme.of(context).textTheme.labelSmall),
     ],
   );
 }
