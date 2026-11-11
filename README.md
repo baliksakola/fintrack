@@ -28,7 +28,9 @@ Aplikasi Android pengelolaan keuangan pribadi dengan pendekatan **local-first**.
 - Pemulihan backup terenkripsi dengan validasi integritas file dan kata sandi.
 - Pembayaran tagihan otomatis dicatat sebagai transaksi pengeluaran dan mengurangi saldo rekening.
 - Pencatatan utang dan piutang dengan pembayaran bertahap serta perhitungan sisa otomatis.
-- Laporan pemasukan/pengeluaran, grafik 7 hari, dan rekap kategori.
+- Laporan pemasukan/pengeluaran dengan filter periode dan rentang tanggal.
+- Ekspor laporan ke Excel (.xlsx) dan PDF, termasuk saldo awal/akhir serta rincian transaksi.
+- Grafik aktivitas 7 hari dan rekap pengeluaran per kategori.
 - Ledger untuk menghitung saldo rekening.
 - Test dasar untuk pemasukan, pengeluaran, transfer, dan validasi nominal.
 
