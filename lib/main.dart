@@ -5,7 +5,7 @@ import 'features/dashboard/dashboard_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final db = AppDatabase();
+  final db = await AppDatabase.open();
   runApp(ProviderScope(
     overrides: [databaseProvider.overrideWithValue(db)],
     child: const FinTrackApp(),
