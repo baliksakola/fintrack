@@ -220,7 +220,11 @@ Future<void> _showTransactionDialog(BuildContext context, AppDatabase db, String
             }
             if (dialogContext.mounted) Navigator.pop(dialogContext);
           } catch (e) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+            if (dialogContext.mounted) {
+              ScaffoldMessenger.of(dialogContext).showSnackBar(
+                SnackBar(content: Text(e.toString())),
+              );
+            }
           }
         }, child: const Text('Simpan')),
       ],
