@@ -1,4 +1,7 @@
 import 'dart:math' as math;
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -102,6 +105,8 @@ class DashboardScreen extends ConsumerWidget {
                   );
                 },
               ),
+              const SizedBox(height: 24),
+              BackupSection(database: db),
               const SizedBox(height: 24),
               BillsSection(database: db),
               const SizedBox(height: 24),
@@ -544,6 +549,139 @@ class _TransactionHistorySectionState extends State<TransactionHistorySection> {
 
 
 
+
+
+
+class BackupSection extends StatefulWidget {
+  const BackupSection({super.key, required this.database});
+
+  final AppDatabase database;
+
+  @override
+  State<BackupSection> createState() => _BackupSectionState();
+}
+
+class _BackupSectionState extends State<BackupSection> {
+  bool _busy = false;
+
+  Future<void> _exportBackup() async {
+    setState(() => _busy = true);
+    try {
+      final json = await widget.database.exportBackupJson();
+      final stamp = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
+      final path = await FilePicker.platform.saveFile(
+        dialogTitle: 'Simpan backup FinTrack',
+        fileName: 'fintrack_backup_$stamp.json',
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+        bytes: Uint8List.fromList(utf8.encode(json)),
+      );
+      if (!mounted) return;
+      if (path != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Backup berhasil disimpan.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal membuat backup: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _importBackup() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Pulihkan backup?'),
+        content: const Text(
+          'Pemulihan akan mengganti seluruh data FinTrack saat ini dengan data dari file backup. '
+          'Buat backup terbaru sebelum melanjutkan.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Pilih file backup'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _busy = true);
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        dialogTitle: 'Pilih backup FinTrack',
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+        withData: true,
+      );
+      if (result == null || result.files.single.bytes == null) return;
+      final source = utf8.decode(result.files.single.bytes!);
+      await widget.database.restoreBackupJson(source);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Backup berhasil dipulihkan.')),
+      );
+    } on FormatException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('File backup tidak valid: $e')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal memulihkan backup: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text('Backup & restore', style: Theme.of(context).textTheme.titleLarge),
+      const SizedBox(height: 8),
+      const Text(
+        'Simpan salinan rekening, transaksi, anggaran, dan tagihan. '
+        'File backup berbentuk JSON dan dapat dipindahkan ke perangkat lain.',
+      ),
+      const SizedBox(height: 8),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          FilledButton.icon(
+            onPressed: _busy ? null : _exportBackup,
+            icon: const Icon(Icons.backup_outlined),
+            label: const Text('Buat backup'),
+          ),
+          OutlinedButton.icon(
+            onPressed: _busy ? null : _importBackup,
+            icon: const Icon(Icons.restore),
+            label: const Text('Pulihkan backup'),
+          ),
+        ],
+      ),
+      if (_busy) const Padding(
+        padding: EdgeInsets.only(top: 8),
+        child: LinearProgressIndicator(),
+      ),
+    ],
+  );
+}
 
 class BillsSection extends StatefulWidget {
   const BillsSection({super.key, required this.database});
