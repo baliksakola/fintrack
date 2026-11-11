@@ -149,6 +149,58 @@ void main() {
     expect(await db.watchBudgetsForMonth(month).first, isEmpty);
   });
 
+  test('paying a bill records expense and creates next monthly bill', () async {
+    await db.addAccount('Bank', 'Bank', 500000);
+    final account = (await db.watchAccounts().first).single;
+    final due = DateTime(2026, 11, 30);
+
+    await db.addBill(
+      title: 'Internet',
+      category: 'Tagihan',
+      amount: 150000,
+      dueDate: due,
+      isMonthly: true,
+    );
+    final bill = (await db.watchBills().first).single;
+
+    await db.markBillPaid(
+      billId: bill.id,
+      accountId: account.id,
+    );
+
+    expect(await db.balanceFor(account.id), 350000);
+    final transactions = await db.watchTransactions().first;
+    expect(transactions, hasLength(1));
+    expect(transactions.single.type, 'expense');
+    expect(transactions.single.amount, 150000);
+    expect(transactions.single.title, 'Pembayaran: Internet');
+
+    final bills = await db.watchBills().first;
+    expect(bills, hasLength(2));
+    expect(bills.where((item) => item.isPaid), hasLength(1));
+    final nextBill = bills.singleWhere((item) => !item.isPaid);
+    expect(nextBill.dueDate, DateTime(2026, 12, 30));
+  });
+
+  test('monthly bill clamps due date to last day of next month', () async {
+    await db.addAccount('Bank', 'Bank', 500000);
+    final account = (await db.watchAccounts().first).single;
+    await db.addBill(
+      title: 'Internet',
+      category: 'Tagihan',
+      amount: 100000,
+      dueDate: DateTime(2026, 1, 31),
+      isMonthly: true,
+    );
+    final bill = (await db.watchBills().first).single;
+
+    await db.markBillPaid(billId: bill.id, accountId: account.id);
+
+    final next = (await db.watchBills().first)
+        .singleWhere((item) => !item.isPaid);
+    expect(next.dueDate, DateTime(2026, 2, 28));
+  });
+
   test('invalid amount is rejected', () async {
     await db.addAccount('Tunai', 'Tunai', 0);
     final account = (await db.watchAccounts().first).single;
