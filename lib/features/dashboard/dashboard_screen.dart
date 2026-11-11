@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -101,6 +102,8 @@ class DashboardScreen extends ConsumerWidget {
                   );
                 },
               ),
+              const SizedBox(height: 24),
+              FinanceReportsSection(database: db),
               const SizedBox(height: 24),
               TransactionHistorySection(database: db),
             ],
@@ -533,3 +536,347 @@ class _TransactionHistorySectionState extends State<TransactionHistorySection> {
   }
 }
 
+
+class FinanceReportsSection extends StatefulWidget {
+  const FinanceReportsSection({super.key, required this.database});
+
+  final AppDatabase database;
+
+  @override
+  State<FinanceReportsSection> createState() => _FinanceReportsSectionState();
+}
+
+class _FinanceReportsSectionState extends State<FinanceReportsSection> {
+  String _period = 'Bulan ini';
+
+  DateTime _periodStart(DateTime now) {
+    final today = DateTime(now.year, now.month, now.day);
+    switch (_period) {
+      case 'Bulan lalu':
+        return DateTime(now.year, now.month - 1);
+      case '30 hari':
+        return today.subtract(const Duration(days: 29));
+      default:
+        return DateTime(now.year, now.month);
+    }
+  }
+
+  DateTime _periodEnd(DateTime now) {
+    if (_period == 'Bulan lalu') {
+      return DateTime(now.year, now.month);
+    }
+    return DateTime(now.year, now.month, now.day + 1);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final start = _periodStart(now);
+    final end = _periodEnd(now);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Laporan keuangan', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          initialValue: _period,
+          decoration: const InputDecoration(
+            labelText: 'Periode laporan',
+            border: OutlineInputBorder(),
+          ),
+          items: const ['Bulan ini', 'Bulan lalu', '30 hari']
+              .map((value) => DropdownMenuItem(value: value, child: Text(value)))
+              .toList(),
+          onChanged: (value) => setState(() => _period = value ?? 'Bulan ini'),
+        ),
+        const SizedBox(height: 8),
+        StreamBuilder<List<FinanceTransaction>>(
+          stream: widget.database.watchTransactions(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return const Card(child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('Laporan tidak dapat dimuat.'),
+              ));
+            }
+            final transactions = (snapshot.data ?? []).where((tx) =>
+              tx.type != 'transfer' &&
+              !tx.occurredAt.isBefore(start) &&
+              tx.occurredAt.isBefore(end)
+            ).toList();
+
+            var income = 0;
+            var expense = 0;
+            final expenseByCategory = <String, int>{};
+            for (final tx in transactions) {
+              if (tx.type == 'income') {
+                income += tx.amount;
+              } else if (tx.type == 'expense') {
+                expense += tx.amount;
+                final category = (tx.category == null || tx.category!.isEmpty)
+                    ? 'Tanpa kategori'
+                    : tx.category!;
+                expenseByCategory[category] = (expenseByCategory[category] ?? 0) + tx.amount;
+              }
+            }
+            final days = List<DateTime>.generate(7, (index) {
+              final today = DateTime(now.year, now.month, now.day);
+              return today.subtract(Duration(days: 6 - index));
+            });
+            final dailyIncome = <int>[];
+            final dailyExpense = <int>[];
+            for (final day in days) {
+              var dayIncome = 0;
+              var dayExpense = 0;
+              for (final tx in transactions) {
+                if (tx.occurredAt.year == day.year &&
+                    tx.occurredAt.month == day.month &&
+                    tx.occurredAt.day == day.day) {
+                  if (tx.type == 'income') dayIncome += tx.amount;
+                  if (tx.type == 'expense') dayExpense += tx.amount;
+                }
+              }
+              dailyIncome.add(dayIncome);
+              dailyExpense.add(dayExpense);
+            }
+            final categories = expenseByCategory.entries.toList()
+              ..sort((a, b) => b.value.compareTo(a.value));
+            final maxCategory = categories.isEmpty ? 1 : categories.first.value;
+            final net = income - expense;
+
+            return Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: _ReportMetric(
+                      title: 'Pemasukan',
+                      amount: income,
+                      color: Colors.green,
+                    )),
+                    const SizedBox(width: 8),
+                    Expanded(child: _ReportMetric(
+                      title: 'Pengeluaran',
+                      amount: expense,
+                      color: Colors.red,
+                    )),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  child: ListTile(
+                    title: const Text('Selisih pemasukan - pengeluaran'),
+                    subtitle: Text(_period),
+                    trailing: Text(
+                      _rupiah.format(net),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: net >= 0 ? Colors.green : Colors.red,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Aktivitas 7 hari terakhir',
+                          style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          height: 150,
+                          width: double.infinity,
+                          child: CustomPaint(
+                            painter: _DailyFinanceChartPainter(
+                              income: dailyIncome,
+                              expense: dailyExpense,
+                              incomeColor: Colors.green,
+                              expenseColor: Colors.red,
+                              gridColor: Theme.of(context).dividerColor,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: days.map((day) => Text(
+                            DateFormat('E', 'id_ID').format(day),
+                            style: Theme.of(context).textTheme.bodySmall,
+                          )).toList(),
+                        ),
+                        const SizedBox(height: 12),
+                        const Wrap(
+                          spacing: 16,
+                          children: [
+                            _ChartLegend(color: Colors.green, label: 'Pemasukan'),
+                            _ChartLegend(color: Colors.red, label: 'Pengeluaran'),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Pengeluaran per kategori',
+                          style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 12),
+                        if (categories.isEmpty)
+                          const Text('Belum ada pengeluaran pada periode ini.')
+                        else
+                          ...categories.map((entry) => Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(child: Text(entry.key)),
+                                    Text(_rupiah.format(entry.value)),
+                                  ],
+                                ),
+                                const SizedBox(height: 5),
+                                LinearProgressIndicator(
+                                  value: entry.value / maxCategory,
+                                  minHeight: 7,
+                                ),
+                              ],
+                            ),
+                          )),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _ReportMetric extends StatelessWidget {
+  const _ReportMetric({
+    required this.title,
+    required this.amount,
+    required this.color,
+  });
+
+  final String title;
+  final int amount;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 8),
+          Text(
+            _rupiah.format(amount),
+            style: TextStyle(color: color, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _ChartLegend extends StatelessWidget {
+  const _ChartLegend({required this.color, required this.label});
+
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(width: 10, height: 10, decoration: BoxDecoration(
+        color: color, borderRadius: BorderRadius.circular(2),
+      )),
+      const SizedBox(width: 5),
+      Text(label, style: Theme.of(context).textTheme.bodySmall),
+    ],
+  );
+}
+
+class _DailyFinanceChartPainter extends CustomPainter {
+  _DailyFinanceChartPainter({
+    required this.income,
+    required this.expense,
+    required this.incomeColor,
+    required this.expenseColor,
+    required this.gridColor,
+  });
+
+  final List<int> income;
+  final List<int> expense;
+  final Color incomeColor;
+  final Color expenseColor;
+  final Color gridColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const top = 8.0;
+    const bottom = 8.0;
+    final chartHeight = size.height - top - bottom;
+    final maxValue = math.max(
+      1,
+      income.fold<int>(0, math.max) > expense.fold<int>(0, math.max)
+          ? income.fold<int>(0, math.max)
+          : expense.fold<int>(0, math.max),
+    );
+    final gridPaint = Paint()
+      ..color = gridColor
+      ..strokeWidth = 0.7;
+    for (var line = 0; line <= 3; line++) {
+      final y = top + chartHeight * line / 3;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
+    final slotWidth = size.width / 7;
+    final barWidth = math.min(10.0, slotWidth * 0.27);
+    final incomePaint = Paint()..color = incomeColor;
+    final expensePaint = Paint()..color = expenseColor;
+    for (var i = 0; i < 7; i++) {
+      final center = slotWidth * (i + 0.5);
+      final incomeHeight = chartHeight * income[i] / maxValue;
+      final expenseHeight = chartHeight * expense[i] / maxValue;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(center - barWidth - 1, top + chartHeight - incomeHeight, barWidth, incomeHeight),
+          const Radius.circular(3),
+        ),
+        incomePaint,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(center + 1, top + chartHeight - expenseHeight, barWidth, expenseHeight),
+          const Radius.circular(3),
+        ),
+        expensePaint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DailyFinanceChartPainter oldDelegate) =>
+      oldDelegate.income != income ||
+      oldDelegate.expense != expense ||
+      oldDelegate.incomeColor != incomeColor ||
+      oldDelegate.expenseColor != expenseColor ||
+      oldDelegate.gridColor != gridColor;
+}
