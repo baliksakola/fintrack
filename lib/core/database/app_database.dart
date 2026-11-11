@@ -134,6 +134,60 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
+  Future<void> updateTransaction({
+    required String transactionId,
+    required String accountId,
+    required int amount,
+    required String title,
+  }) async {
+    if (amount <= 0 || title.trim().isEmpty) {
+      throw ArgumentError('Nominal dan deskripsi wajib valid.');
+    }
+    final current = await (select(financeTransactions)
+      ..where((t) => t.id.equals(transactionId))).getSingleOrNull();
+    if (current == null) throw StateError('Transaksi tidak ditemukan.');
+    if (current.type == 'transfer') {
+      throw StateError('Transaksi transfer belum dapat diedit.');
+    }
+    final account = await (select(accounts)..where((a) =>
+      a.id.equals(accountId) & a.archived.equals(false))).getSingleOrNull();
+    if (account == null) throw StateError('Rekening tidak ditemukan.');
+    final delta = current.type == 'income' ? amount : -amount;
+    await transaction(() async {
+      await (delete(ledgerEntries)
+        ..where((entry) => entry.transactionId.equals(transactionId))).go();
+      await (update(financeTransactions)
+        ..where((t) => t.id.equals(transactionId))).write(
+          FinanceTransactionsCompanion(
+            accountId: Value(accountId),
+            amount: Value(amount),
+            title: Value(title.trim()),
+          ),
+        );
+      await into(ledgerEntries).insert(LedgerEntriesCompanion.insert(
+        id: _uuid.v4(),
+        transactionId: transactionId,
+        accountId: accountId,
+        amountDelta: delta,
+        createdAt: DateTime.now(),
+      ));
+    });
+  }
+
+  Future<void> deleteTransaction(String transactionId) async {
+    final current = await (select(financeTransactions)
+      ..where((t) => t.id.equals(transactionId))).getSingleOrNull();
+    if (current == null) throw StateError('Transaksi tidak ditemukan.');
+    await transaction(() async {
+      await (delete(ledgerEntries)
+        ..where((entry) => entry.transactionId.equals(transactionId))).go();
+      await (delete(transfers)
+        ..where((transfer) => transfer.transactionId.equals(transactionId))).go();
+      await (delete(financeTransactions)
+        ..where((t) => t.id.equals(transactionId))).go();
+    });
+  }
+
   Future<int> balanceFor(String accountId) async {
     final account = await (select(accounts)
       ..where((a) => a.id.equals(accountId))).getSingle();
