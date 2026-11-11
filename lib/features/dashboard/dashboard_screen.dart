@@ -1618,7 +1618,9 @@ class _BillsSectionState extends State<BillsSection> {
     final amount = TextEditingController();
     String category = _expenseCategories.first;
     bool monthly = true;
+    bool limited = true;
     DateTime dueDate = DateTime.now();
+    DateTime repeatUntil = DateTime(dueDate.year, dueDate.month + 5, dueDate.day);
 
     await showDialog<void>(
       context: context,
@@ -1626,88 +1628,65 @@ class _BillsSectionState extends State<BillsSection> {
         builder: (context, setDialogState) => AlertDialog(
           title: const Text('Tambah tagihan'),
           content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: title,
-                  decoration: const InputDecoration(labelText: 'Nama tagihan'),
-                ),
-                TextField(
-                  controller: amount,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Nominal (Rp)'),
-                ),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  initialValue: category,
-                  decoration: const InputDecoration(labelText: 'Kategori'),
-                  items: _expenseCategories.map((value) => DropdownMenuItem(
-                    value: value, child: Text(value),
-                  )).toList(),
-                  onChanged: (value) => setDialogState(
-                    () => category = value ?? category,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Tanggal jatuh tempo'),
-                  subtitle: Text(DateFormat('dd MMMM yyyy', 'id_ID').format(dueDate)),
-                  trailing: const Icon(Icons.calendar_month),
-                  onTap: () async {
-                    final picked = await showDatePicker(
-                      context: dialogContext,
-                      initialDate: dueDate,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime(2100),
-                    );
-                    if (picked != null) {
-                      setDialogState(() => dueDate = picked);
-                    }
-                  },
-                ),
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: monthly,
-                  title: const Text('Tagihan berulang setiap bulan'),
-                  onChanged: (value) => setDialogState(
-                    () => monthly = value ?? false,
-                  ),
-                ),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(controller: title, decoration: const InputDecoration(labelText: 'Nama tagihan')),
+              TextField(controller: amount, keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Nominal (Rp)')),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                initialValue: category, decoration: const InputDecoration(labelText: 'Kategori'),
+                items: _expenseCategories.map((value) => DropdownMenuItem(value: value, child: Text(value))).toList(),
+                onChanged: (value) => setDialogState(() => category = value ?? category),
+              ),
+              const SizedBox(height: 8),
+              ListTile(contentPadding: EdgeInsets.zero, title: const Text('Tanggal mulai'),
+                subtitle: Text(DateFormat('dd MMMM yyyy', 'id_ID').format(dueDate)),
+                trailing: const Icon(Icons.calendar_month),
+                onTap: () async {
+                  final picked = await showDatePicker(context: dialogContext, initialDate: dueDate,
+                    firstDate: DateTime(2020), lastDate: DateTime(2100));
+                  if (picked != null) setDialogState(() {
+                    dueDate = picked;
+                    if (repeatUntil.isBefore(dueDate)) repeatUntil = DateTime(dueDate.year, dueDate.month + 5, dueDate.day);
+                  });
+                }),
+              SwitchListTile(contentPadding: EdgeInsets.zero, value: monthly,
+                title: const Text('Ulangi setiap bulan'),
+                onChanged: (value) => setDialogState(() => monthly = value)),
+              if (monthly) ...[
+                CheckboxListTile(contentPadding: EdgeInsets.zero, value: limited,
+                  title: const Text('Tentukan batas akhir'), subtitle: const Text('Contoh: 6 atau 12 bulan'),
+                  onChanged: (value) => setDialogState(() => limited = value ?? true)),
+                if (limited)
+                  ListTile(contentPadding: EdgeInsets.zero, title: const Text('Berulang sampai tanggal'),
+                    subtitle: Text(DateFormat('dd MMMM yyyy', 'id_ID').format(repeatUntil)),
+                    trailing: const Icon(Icons.event),
+                    onTap: () async {
+                      final picked = await showDatePicker(context: dialogContext,
+                        initialDate: repeatUntil.isBefore(dueDate) ? dueDate : repeatUntil,
+                        firstDate: dueDate, lastDate: DateTime(2100));
+                      if (picked != null) setDialogState(() => repeatUntil = picked);
+                    }),
               ],
-            ),
+              if (monthly && limited)
+                Align(alignment: Alignment.centerLeft, child: Text(
+                  'Jadwal: ${DateFormat('MMM yyyy', 'id_ID').format(dueDate)} – ${DateFormat('MMM yyyy', 'id_ID').format(repeatUntil)}',
+                  style: Theme.of(context).textTheme.bodySmall)),
+            ]),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Batal'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                final value = int.tryParse(
-                  amount.text.replaceAll('.', '').replaceAll(',', ''),
-                ) ?? 0;
-                try {
-                  await widget.database.addBill(
-                    title: title.text,
-                    category: category,
-                    amount: value,
-                    dueDate: dueDate,
-                    isMonthly: monthly,
-                  );
-                  await _refreshReminders();
-                  if (dialogContext.mounted) Navigator.pop(dialogContext);
-                } catch (e) {
-                  if (dialogContext.mounted) {
-                    ScaffoldMessenger.of(dialogContext).showSnackBar(
-                      SnackBar(content: Text(e.toString())),
-                    );
-                  }
-                }
-              },
-              child: const Text('Simpan tagihan'),
-            ),
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Batal')),
+            FilledButton(onPressed: () async {
+              final value = int.tryParse(amount.text.replaceAll('.', '').replaceAll(',', '')) ?? 0;
+              try {
+                await widget.database.addBill(title: title.text, category: category, amount: value,
+                  dueDate: dueDate, isMonthly: monthly, repeatUntil: monthly && limited ? repeatUntil : null);
+                await _refreshReminders();
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
+              } catch (e) {
+                if (dialogContext.mounted) ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text(e.toString())));
+              }
+            }, child: const Text('Simpan tagihan')),
           ],
         ),
       ),
