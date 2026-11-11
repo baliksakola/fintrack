@@ -599,7 +599,8 @@ class _FinanceReportsSectionState extends State<FinanceReportsSection> {
                 child: Text('Laporan tidak dapat dimuat.'),
               ));
             }
-            final transactions = (snapshot.data ?? []).where((tx) =>
+            final allTransactions = snapshot.data ?? [];
+            final transactions = allTransactions.where((tx) =>
               tx.type != 'transfer' &&
               !tx.occurredAt.isBefore(start) &&
               tx.occurredAt.isBefore(end)
@@ -628,8 +629,9 @@ class _FinanceReportsSectionState extends State<FinanceReportsSection> {
             for (final day in days) {
               var dayIncome = 0;
               var dayExpense = 0;
-              for (final tx in transactions) {
-                if (tx.occurredAt.year == day.year &&
+              for (final tx in allTransactions) {
+                if (tx.type != 'transfer' &&
+                    tx.occurredAt.year == day.year &&
                     tx.occurredAt.month == day.month &&
                     tx.occurredAt.day == day.day) {
                   if (tx.type == 'income') dayIncome += tx.amount;
@@ -833,12 +835,9 @@ class _DailyFinanceChartPainter extends CustomPainter {
     const top = 8.0;
     const bottom = 8.0;
     final chartHeight = size.height - top - bottom;
-    final maxValue = math.max(
-      1,
-      income.fold<int>(0, math.max) > expense.fold<int>(0, math.max)
-          ? income.fold<int>(0, math.max)
-          : expense.fold<int>(0, math.max),
-    );
+    final incomeMax = income.reduce((a, b) => a > b ? a : b);
+    final expenseMax = expense.reduce((a, b) => a > b ? a : b);
+    final maxValue = math.max(1, math.max(incomeMax, expenseMax));
     final gridPaint = Paint()
       ..color = gridColor
       ..strokeWidth = 0.7;
