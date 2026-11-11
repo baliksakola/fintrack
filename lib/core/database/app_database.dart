@@ -12,7 +12,7 @@ part 'app_database.g.dart';
 final databaseProvider = Provider<AppDatabase>((ref) =>
     throw UnimplementedError('Database provider not initialized'));
 
-@DriftDatabase(tables: [Accounts, FinanceTransactions, LedgerEntries, Transfers])
+@DriftDatabase(tables: [Accounts, FinanceTransactions, LedgerEntries, Transfers, Budgets])
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.executor);
 
@@ -25,7 +25,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -33,11 +33,53 @@ class AppDatabase extends _$AppDatabase {
       await m.createAll();
       await customStatement('PRAGMA foreign_keys = ON');
     },
+    onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        await m.createTable(budgets);
+      }
+    },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
       await customStatement('PRAGMA journal_mode = WAL');
     },
   );
+
+  Stream<List<Budget>> watchBudgetsForMonth(DateTime month) {
+    final monthStart = DateTime(month.year, month.month);
+    return (select(budgets)
+      ..where((b) => b.month.equals(monthStart))
+      ..orderBy([(b) => OrderingTerm.asc(b.category)])).watch();
+  }
+
+  Future<void> saveBudget({
+    required String category,
+    required int monthlyLimit,
+    required DateTime month,
+  }) async {
+    if (category.trim().isEmpty || monthlyLimit <= 0) {
+      throw ArgumentError('Kategori dan batas anggaran harus valid.');
+    }
+    final monthStart = DateTime(month.year, month.month);
+    final existing = await (select(budgets)
+      ..where((b) => b.category.equals(category.trim()) & b.month.equals(monthStart)))
+      .getSingleOrNull();
+    if (existing == null) {
+      await into(budgets).insert(BudgetsCompanion.insert(
+        id: _uuid.v4(),
+        category: category.trim(),
+        monthlyLimit: monthlyLimit,
+        month: monthStart,
+        createdAt: DateTime.now(),
+      ));
+    } else {
+      await (update(budgets)..where((b) => b.id.equals(existing.id))).write(
+        BudgetsCompanion(monthlyLimit: Value(monthlyLimit)),
+      );
+    }
+  }
+
+  Future<void> deleteBudget(String budgetId) =>
+      (delete(budgets)..where((b) => b.id.equals(budgetId))).go();
 
   Future<void> addAccount(String name, String type, int openingBalance) async {
     if (name.trim().isEmpty || openingBalance < 0) {
