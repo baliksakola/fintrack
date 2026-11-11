@@ -24,7 +24,8 @@ Aplikasi Android pengelolaan keuangan pribadi dengan pendekatan **local-first**.
 - Anggaran bulanan per kategori dengan indikator penggunaan dan peringatan batas.
 - Pencatatan tagihan dengan tanggal jatuh tempo dan status pembayaran.
 - Tagihan bulanan berulang dibuat otomatis setelah pembayaran.
-- Backup seluruh data ke file JSON dan pemulihan dari file backup.
+- Backup seluruh data ke file terenkripsi AES-256-GCM dengan kata sandi.
+- Pemulihan backup terenkripsi dengan validasi integritas file dan kata sandi.
 - Pembayaran tagihan otomatis dicatat sebagai transaksi pengeluaran dan mengurangi saldo rekening.
 - Laporan pemasukan/pengeluaran, grafik 7 hari, dan rekap kategori.
 - Ledger untuk menghitung saldo rekening.
