@@ -16,6 +16,12 @@ final _rupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDig
 const _incomeCategories = ['Gaji', 'Bonus', 'Usaha', 'Investasi', 'Hadiah', 'Lainnya'];
 const _expenseCategories = ['Makanan', 'Transportasi', 'Belanja', 'Tagihan', 'Kesehatan', 'Pendidikan', 'Hiburan', 'Lainnya'];
 
+DateTime _addMonthsClamped(DateTime date, int months) {
+  final target = DateTime(date.year, date.month + months, 1);
+  final lastDay = DateTime(target.year, target.month + 1, 0).day;
+  return DateTime(target.year, target.month, date.day > lastDay ? lastDay : date.day);
+}
+
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
@@ -1620,7 +1626,7 @@ class _BillsSectionState extends State<BillsSection> {
     bool monthly = true;
     bool limited = true;
     DateTime dueDate = DateTime.now();
-    DateTime repeatUntil = DateTime(dueDate.year, dueDate.month + 5, dueDate.day);
+    DateTime repeatUntil = _addMonthsClamped(dueDate, 5);
 
     await showDialog<void>(
       context: context,
@@ -1647,7 +1653,7 @@ class _BillsSectionState extends State<BillsSection> {
                     firstDate: DateTime(2020), lastDate: DateTime(2100));
                   if (picked != null) setDialogState(() {
                     dueDate = picked;
-                    if (repeatUntil.isBefore(dueDate)) repeatUntil = DateTime(dueDate.year, dueDate.month + 5, dueDate.day);
+                    if (repeatUntil.isBefore(dueDate)) repeatUntil = _addMonthsClamped(dueDate, 5);
                   });
                 }),
               SwitchListTile(contentPadding: EdgeInsets.zero, value: monthly,
