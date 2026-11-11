@@ -24,6 +24,37 @@ jobs:
             flutter create --platforms=android --org id.fintrack --project-name fintrack .
           fi
 
+      - name: Set Android compile SDK to 36
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          candidates = [
+              Path("android/app/build.gradle.kts"),
+              Path("android/app/build.gradle"),
+          ]
+          app_gradle = next((path for path in candidates if path.exists()), None)
+          if app_gradle is None:
+              raise SystemExit("Android app Gradle file was not generated")
+
+          content = app_gradle.read_text()
+          if app_gradle.suffix == ".kts":
+              content = content.replace(
+                  "compileSdk = flutter.compileSdkVersion",
+                  "compileSdk = 36",
+              )
+          else:
+              content = content.replace(
+                  "compileSdkVersion flutter.compileSdkVersion",
+                  "compileSdkVersion 36",
+              )
+          app_gradle.write_text(content)
+
+          if "compileSdk = 36" not in content and "compileSdkVersion 36" not in content:
+              raise SystemExit("Could not set compileSdk to 36")
+          print(f"Configured {app_gradle} to compileSdk 36")
+          PY
+
       - name: Install dependencies
         run: flutter pub get
 
