@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'core/database/app_database.dart';
 import 'features/dashboard/dashboard_screen.dart';
+import 'core/notifications/bill_notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('id_ID');
+  await BillNotificationService.instance.initialize();
   final db = await AppDatabase.open();
   runApp(ProviderScope(
     overrides: [databaseProvider.overrideWithValue(db)],
