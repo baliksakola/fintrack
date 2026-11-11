@@ -60,3 +60,18 @@ class Budgets extends Table {
     {category, month},
   ];
 }
+
+
+class Bills extends Table {
+  TextColumn get id => text()();
+  TextColumn get title => text()();
+  TextColumn get category => text()();
+  IntColumn get amount => integer()();
+  DateTimeColumn get dueDate => dateTime()();
+  BoolColumn get isPaid => boolean().withDefault(const Constant(false))();
+  BoolColumn get isMonthly => boolean().withDefault(const Constant(false))();
+  DateTimeColumn get paidAt => dateTime().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
