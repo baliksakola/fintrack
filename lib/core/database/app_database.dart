@@ -13,7 +13,7 @@ part 'app_database.g.dart';
 final databaseProvider = Provider<AppDatabase>((ref) =>
     throw UnimplementedError('Database provider not initialized'));
 
-@DriftDatabase(tables: [Accounts, FinanceTransactions, LedgerEntries, Transfers, Budgets, Bills])
+@DriftDatabase(tables: [Accounts, FinanceTransactions, LedgerEntries, Transfers, Budgets, Bills, Debts, DebtPayments])
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.executor);
 
@@ -26,7 +26,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -41,12 +41,118 @@ class AppDatabase extends _$AppDatabase {
       if (from < 3) {
         await m.createTable(bills);
       }
+      if (from < 4) {
+        await m.createTable(debts);
+        await m.createTable(debtPayments);
+      }
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
       await customStatement('PRAGMA journal_mode = WAL');
     },
   );
+
+
+  Stream<List<Debt>> watchDebts() =>
+      (select(debts)..orderBy([
+        (d) => OrderingTerm.asc(d.dueDate),
+        (d) => OrderingTerm.desc(d.createdAt),
+      ])).watch();
+
+  Future<void> addDebt({
+    required String direction,
+    required String partyName,
+    required String title,
+    required int amount,
+    DateTime? dueDate,
+    String? notes,
+  }) async {
+    if (!['payable', 'receivable'].contains(direction) ||
+        partyName.trim().isEmpty || title.trim().isEmpty || amount <= 0) {
+      throw ArgumentError('Data utang/piutang tidak valid.');
+    }
+    await into(debts).insert(DebtsCompanion.insert(
+      id: _uuid.v4(),
+      direction: direction,
+      partyName: partyName.trim(),
+      title: title.trim(),
+      amount: amount,
+      dueDate: Value(dueDate == null
+          ? null
+          : DateTime(dueDate.year, dueDate.month, dueDate.day)),
+      notes: Value(notes?.trim().isEmpty == true ? null : notes?.trim()),
+      createdAt: DateTime.now(),
+    ));
+  }
+
+  Future<int> debtRemaining(String debtId) async {
+    final debt = await (select(debts)..where((d) => d.id.equals(debtId)))
+        .getSingleOrNull();
+    if (debt == null) throw StateError('Data utang/piutang tidak ditemukan.');
+    final paid = await (selectOnly(debtPayments)
+      ..addColumns([debtPayments.amount.sum()])
+      ..where(debtPayments.debtId.equals(debtId))).getSingle();
+    return debt.amount - (paid.read(debtPayments.amount.sum()) ?? 0);
+  }
+
+  Future<void> addDebtPayment({
+    required String debtId,
+    required String accountId,
+    required int amount,
+  }) async {
+    if (amount <= 0) throw ArgumentError('Nominal pembayaran harus lebih dari nol.');
+    final debt = await (select(debts)..where((d) => d.id.equals(debtId)))
+        .getSingleOrNull();
+    if (debt == null) throw StateError('Data utang/piutang tidak ditemukan.');
+    final account = await (select(accounts)..where((a) =>
+      a.id.equals(accountId) & a.archived.equals(false))).getSingleOrNull();
+    if (account == null) throw StateError('Rekening tidak ditemukan.');
+    final remaining = await debtRemaining(debtId);
+    if (amount > remaining) {
+      throw ArgumentError('Pembayaran melebihi sisa kewajiban.');
+    }
+
+    final now = DateTime.now();
+    final transactionId = _uuid.v4();
+    final isReceivable = debt.direction == 'receivable';
+    await transaction(() async {
+      await into(financeTransactions).insert(FinanceTransactionsCompanion.insert(
+        id: transactionId,
+        type: isReceivable ? 'income' : 'expense',
+        accountId: accountId,
+        amount: amount,
+        title: isReceivable
+            ? 'Penerimaan piutang: ${debt.title}'
+            : 'Pembayaran utang: ${debt.title}',
+        category: Value(isReceivable ? 'Piutang' : 'Utang'),
+        occurredAt: now,
+        createdAt: now,
+      ));
+      await into(ledgerEntries).insert(LedgerEntriesCompanion.insert(
+        id: _uuid.v4(),
+        transactionId: transactionId,
+        accountId: accountId,
+        amountDelta: isReceivable ? amount : -amount,
+        createdAt: now,
+      ));
+      await into(debtPayments).insert(DebtPaymentsCompanion.insert(
+        id: _uuid.v4(),
+        debtId: debtId,
+        transactionId: transactionId,
+        amount: amount,
+        paidAt: now,
+      ));
+    });
+  }
+
+  Future<void> deleteDebt(String debtId) async {
+    final payments = await (select(debtPayments)
+      ..where((p) => p.debtId.equals(debtId))).get();
+    if (payments.isNotEmpty) {
+      throw StateError('Data dengan riwayat pembayaran tidak dapat dihapus.');
+    }
+    await (delete(debts)..where((d) => d.id.equals(debtId))).go();
+  }
 
   Stream<List<Bill>> watchBills() =>
       (select(bills)..orderBy([
@@ -366,6 +472,17 @@ class AppDatabase extends _$AppDatabase {
         'month': row.month.toIso8601String(),
         'createdAt': row.createdAt.toIso8601String(),
       }).toList(),
+      'debts': (await select(debts).get()).map((row) => {
+        'id': row.id, 'direction': row.direction,
+        'partyName': row.partyName, 'title': row.title,
+        'amount': row.amount, 'dueDate': row.dueDate?.toIso8601String(),
+        'notes': row.notes, 'createdAt': row.createdAt.toIso8601String(),
+      }).toList(),
+      'debtPayments': (await select(debtPayments).get()).map((row) => {
+        'id': row.id, 'debtId': row.debtId,
+        'transactionId': row.transactionId, 'amount': row.amount,
+        'paidAt': row.paidAt.toIso8601String(),
+      }).toList(),
       'bills': (await select(bills).get()).map((row) => {
         'id': row.id, 'title': row.title, 'category': row.category,
         'amount': row.amount, 'dueDate': row.dueDate.toIso8601String(),
@@ -400,6 +517,8 @@ class AppDatabase extends _$AppDatabase {
     final transferRows = rows('transfers');
     final budgetRows = rows('budgets');
     final billRows = rows('bills');
+    final debtRows = rows('debts');
+    final debtPaymentRows = rows('debtPayments');
 
     DateTime date(Map<String, dynamic> row, String key) {
       final value = row[key];
@@ -430,6 +549,8 @@ class AppDatabase extends _$AppDatabase {
       await delete(transfers).go();
       await delete(financeTransactions).go();
       await delete(budgets).go();
+      await delete(debtPayments).go();
+      await delete(debts).go();
       await delete(bills).go();
       await delete(accounts).go();
 
@@ -475,6 +596,29 @@ class AppDatabase extends _$AppDatabase {
           id: string(row, 'id'), category: string(row, 'category'),
           monthlyLimit: integer(row, 'monthlyLimit'),
           month: date(row, 'month'), createdAt: date(row, 'createdAt'),
+        ));
+      }
+      for (final row in debtRows) {
+        final dueDate = row['dueDate'];
+        final notes = row['notes'];
+        await into(debts).insert(DebtsCompanion.insert(
+          id: string(row, 'id'),
+          direction: string(row, 'direction'),
+          partyName: string(row, 'partyName'),
+          title: string(row, 'title'),
+          amount: integer(row, 'amount'),
+          dueDate: Value(dueDate is String ? DateTime.parse(dueDate) : null),
+          notes: Value(notes is String ? notes : null),
+          createdAt: date(row, 'createdAt'),
+        ));
+      }
+      for (final row in debtPaymentRows) {
+        await into(debtPayments).insert(DebtPaymentsCompanion.insert(
+          id: string(row, 'id'),
+          debtId: string(row, 'debtId'),
+          transactionId: string(row, 'transactionId'),
+          amount: integer(row, 'amount'),
+          paidAt: date(row, 'paidAt'),
         ));
       }
       for (final row in billRows) {
