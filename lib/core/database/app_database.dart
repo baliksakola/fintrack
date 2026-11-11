@@ -184,6 +184,7 @@ class AppDatabase extends _$AppDatabase {
     await transaction(() async {
       var current = start;
       while (true) {
+        if (end != null && current.isAfter(end)) break;
         await into(bills).insert(BillsCompanion.insert(
           id: _uuid.v4(), title: title.trim(), category: category.trim(), amount: amount,
           dueDate: current, isMonthly: Value(isMonthly), recurrenceEndDate: Value(end), createdAt: now,
