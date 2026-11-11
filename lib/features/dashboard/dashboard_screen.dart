@@ -1669,9 +1669,11 @@ class _FinanceReportsSectionState extends State<FinanceReportsSection> {
         bytes: Uint8List.fromList(bytes),
       );
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ekspor Excel gagal: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ekspor Excel gagal: $e')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _exporting = false);
     }
@@ -1698,7 +1700,7 @@ class _FinanceReportsSectionState extends State<FinanceReportsSection> {
         pw.SizedBox(height: 6),
         pw.Text(_dateLabel(start, end)),
         pw.SizedBox(height: 12),
-        pw.Table.fromTextArray(data: [
+        pw.TableHelper.fromTextArray(data: [
           ['Ringkasan', 'Nominal'],
           ['Saldo awal', _rupiah.format(opening)],
           ['Pemasukan', _rupiah.format(income)],
@@ -1721,9 +1723,11 @@ class _FinanceReportsSectionState extends State<FinanceReportsSection> {
         bytes: bytes,
       );
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ekspor PDF gagal: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ekspor PDF gagal: $e')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _exporting = false);
     }
