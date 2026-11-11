@@ -13,7 +13,7 @@ class Accounts extends Table {
 
 class FinanceTransactions extends Table {
   TextColumn get id => text()();
-  TextColumn get type => text()(); // income / expense
+  TextColumn get type => text()(); // income / expense / transfer
   TextColumn get accountId => text().references(Accounts, #id)();
   IntColumn get amount => integer()();
   TextColumn get title => text()();
@@ -29,6 +29,16 @@ class LedgerEntries extends Table {
   TextColumn get transactionId => text().references(FinanceTransactions, #id)();
   TextColumn get accountId => text().references(Accounts, #id)();
   IntColumn get amountDelta => integer()();
+  DateTimeColumn get createdAt => dateTime()();
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+class Transfers extends Table {
+  TextColumn get id => text()();
+  TextColumn get transactionId => text().references(FinanceTransactions, #id)();
+  TextColumn get fromAccountId => text().references(Accounts, #id)();
+  TextColumn get toAccountId => text().references(Accounts, #id)();
   DateTimeColumn get createdAt => dateTime()();
   @override
   Set<Column<Object>> get primaryKey => {id};
