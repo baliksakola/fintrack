@@ -931,6 +931,7 @@ class TransactionHistorySection extends StatefulWidget {
 class _TransactionHistorySectionState extends State<TransactionHistorySection> {
   final _searchController = TextEditingController();
   String _typeFilter = 'Semua';
+  DateTimeRange? _dateRange;
 
   @override
   void dispose() {
@@ -975,6 +976,47 @@ class _TransactionHistorySectionState extends State<TransactionHistorySection> {
           onChanged: (value) => setState(() => _typeFilter = value ?? 'Semua'),
         ),
         const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            OutlinedButton.icon(
+              icon: const Icon(Icons.date_range, size: 18),
+              label: Text(
+                _dateRange == null
+                    ? 'Pilih tanggal'
+                    : '${DateFormat('dd MMM', 'id_ID').format(_dateRange!.start)} – ${DateFormat('dd MMM yyyy', 'id_ID').format(_dateRange!.end)}',
+              ),
+              onPressed: () async {
+                final now = DateTime.now();
+                final picked = await showDateRangePicker(
+                  context: context,
+                  firstDate: DateTime(2000),
+                  lastDate: DateTime(now.year + 5, 12, 31),
+                  initialDateRange: _dateRange,
+                  helpText: 'Pilih rentang tanggal transaksi',
+                  saveText: 'Terapkan',
+                  cancelText: 'Batal',
+                  builder: (context, child) => child!,
+                );
+                if (picked != null && mounted) {
+                  setState(() => _dateRange = DateTimeRange(
+                    start: DateTime(picked.start.year, picked.start.month, picked.start.day),
+                    end: DateTime(picked.end.year, picked.end.month, picked.end.day),
+                  ));
+                }
+              },
+            ),
+            if (_dateRange != null)
+              TextButton.icon(
+                onPressed: () => setState(() => _dateRange = null),
+                icon: const Icon(Icons.close, size: 16),
+                label: const Text('Hapus tanggal'),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
         StreamBuilder<List<FinanceTransaction>>(
           stream: widget.database.watchTransactions(),
           builder: (context, snapshot) {
@@ -993,7 +1035,10 @@ class _TransactionHistorySectionState extends State<TransactionHistorySection> {
               final matchesSearch = query.isEmpty ||
                   tx.title.toLowerCase().contains(query) ||
                   (tx.category ?? '').toLowerCase().contains(query);
-              return matchesType && matchesSearch;
+              final matchesDate = _dateRange == null ||
+                  (!tx.occurredAt.isBefore(_dateRange!.start) &&
+                   tx.occurredAt.isBefore(_dateRange!.end.add(const Duration(days: 1))));
+              return matchesType && matchesSearch && matchesDate;
             }).toList();
 
             if (items.isEmpty) {
