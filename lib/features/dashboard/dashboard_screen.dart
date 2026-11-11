@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
+import 'package:fintrack/core/backup/backup_crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -564,22 +565,82 @@ class BackupSection extends StatefulWidget {
 class _BackupSectionState extends State<BackupSection> {
   bool _busy = false;
 
+  Future<String?> _askPassword({required bool confirm}) async {
+    final password = TextEditingController();
+    final confirmation = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(confirm ? 'Buat kata sandi backup' : 'Kata sandi backup'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: password,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Kata sandi (minimal 10 karakter)',
+              ),
+            ),
+            if (confirm) TextField(
+              controller: confirmation,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Ulangi kata sandi'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (password.text.length < 10 ||
+                  (confirm && password.text != confirmation.text)) {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  SnackBar(
+                    content: Text(password.text.length < 10
+                      ? 'Kata sandi minimal 10 karakter.'
+                      : 'Konfirmasi kata sandi tidak sama.'),
+                  ),
+                );
+                return;
+              }
+              Navigator.pop(dialogContext, password.text);
+            },
+            child: const Text('Lanjutkan'),
+          ),
+        ],
+      ),
+    );
+    password.dispose();
+    confirmation.dispose();
+    return result;
+  }
+
   Future<void> _exportBackup() async {
+    final password = await _askPassword(confirm: true);
+    if (password == null || !mounted) return;
     setState(() => _busy = true);
     try {
       final json = await widget.database.exportBackupJson();
+      final encrypted = await BackupCrypto.encrypt(
+        plaintext: json,
+        password: password,
+      );
       final stamp = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
       final path = await FilePicker.platform.saveFile(
-        dialogTitle: 'Simpan backup FinTrack',
-        fileName: 'fintrack_backup_$stamp.json',
+        dialogTitle: 'Simpan backup FinTrack terenkripsi',
+        fileName: 'fintrack_backup_$stamp.ftbackup',
         type: FileType.custom,
-        allowedExtensions: ['json'],
-        bytes: Uint8List.fromList(utf8.encode(json)),
+        allowedExtensions: ['ftbackup'],
+        bytes: Uint8List.fromList(utf8.encode(encrypted)),
       );
       if (!mounted) return;
       if (path != null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Backup berhasil disimpan.')),
+          const SnackBar(content: Text('Backup terenkripsi berhasil disimpan.')),
         );
       }
     } catch (e) {
@@ -599,7 +660,7 @@ class _BackupSectionState extends State<BackupSection> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('Pulihkan backup?'),
         content: const Text(
-          'Pemulihan akan mengganti seluruh data FinTrack saat ini dengan data dari file backup. '
+          'Pemulihan akan mengganti seluruh data FinTrack saat ini. '
           'Buat backup terbaru sebelum melanjutkan.',
         ),
         actions: [
@@ -615,17 +676,23 @@ class _BackupSectionState extends State<BackupSection> {
       ),
     );
     if (confirmed != true || !mounted) return;
+    final password = await _askPassword(confirm: false);
+    if (password == null || !mounted) return;
 
     setState(() => _busy = true);
     try {
       final result = await FilePicker.platform.pickFiles(
-        dialogTitle: 'Pilih backup FinTrack',
+        dialogTitle: 'Pilih backup FinTrack terenkripsi',
         type: FileType.custom,
-        allowedExtensions: ['json'],
+        allowedExtensions: ['ftbackup'],
         withData: true,
       );
       if (result == null || result.files.single.bytes == null) return;
-      final source = utf8.decode(result.files.single.bytes!);
+      final encrypted = utf8.decode(result.files.single.bytes!);
+      final source = await BackupCrypto.decrypt(
+        encrypted: encrypted,
+        password: password,
+      );
       await widget.database.restoreBackupJson(source);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -634,7 +701,7 @@ class _BackupSectionState extends State<BackupSection> {
     } on FormatException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('File backup tidak valid: $e')),
+          SnackBar(content: Text('Backup tidak dapat dibuka: $e')),
         );
       }
     } catch (e) {
@@ -656,7 +723,7 @@ class _BackupSectionState extends State<BackupSection> {
       const SizedBox(height: 8),
       const Text(
         'Simpan salinan rekening, transaksi, anggaran, dan tagihan. '
-        'File backup berbentuk JSON dan dapat dipindahkan ke perangkat lain.',
+        'File backup dienkripsi dengan kata sandi sebelum disimpan dan dapat dipindahkan ke perangkat lain.',
       ),
       const SizedBox(height: 8),
       Wrap(
