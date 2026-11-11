@@ -2,6 +2,8 @@ import 'dart:math' as math;
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
+import 'package:excel/excel.dart' as xls;
+import 'package:pdf/widgets.dart' as pw;
 import 'package:fintrack/core/backup/backup_crypto.dart';
 import 'package:fintrack/core/notifications/bill_notification_service.dart';
 import 'package:flutter/material.dart';
@@ -1577,6 +1579,9 @@ class FinanceReportsSection extends StatefulWidget {
 
 class _FinanceReportsSectionState extends State<FinanceReportsSection> {
   String _period = 'Bulan ini';
+  DateTime? _customStart;
+  DateTime? _customEnd;
+  bool _exporting = false;
 
   DateTime _periodStart(DateTime now) {
     final today = DateTime(now.year, now.month, now.day);
@@ -1585,16 +1590,143 @@ class _FinanceReportsSectionState extends State<FinanceReportsSection> {
         return DateTime(now.year, now.month - 1);
       case '30 hari':
         return today.subtract(const Duration(days: 29));
+      case 'Rentang tanggal':
+        return _customStart ?? DateTime(now.year, now.month);
       default:
         return DateTime(now.year, now.month);
     }
   }
 
   DateTime _periodEnd(DateTime now) {
-    if (_period == 'Bulan lalu') {
-      return DateTime(now.year, now.month);
+    if (_period == 'Bulan lalu') return DateTime(now.year, now.month);
+    if (_period == 'Rentang tanggal' && _customEnd != null) {
+      return DateTime(_customEnd!.year, _customEnd!.month, _customEnd!.day + 1);
     }
     return DateTime(now.year, now.month, now.day + 1);
+  }
+
+
+  Future<void> _chooseRange() async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(now.year + 10),
+      initialDateRange: DateTimeRange(
+        start: _customStart ?? DateTime(now.year, now.month, 1),
+        end: _customEnd ?? DateTime(now.year, now.month, now.day),
+      ),
+    );
+    if (picked != null) {
+      setState(() {
+        _customStart = picked.start;
+        _customEnd = picked.end;
+        _period = 'Rentang tanggal';
+      });
+    }
+  }
+
+  String _dateLabel(DateTime start, DateTime end) =>
+      '${DateFormat('dd MMM yyyy', 'id_ID').format(start)} - '
+      '${DateFormat('dd MMM yyyy', 'id_ID').format(end.subtract(const Duration(days: 1)))}';
+
+  Future<void> _saveExcel(List<FinanceTransaction> items, int income,
+      int expense, int opening, DateTime start, DateTime end) async {
+    setState(() => _exporting = true);
+    try {
+      final book = xls.Excel.createExcel();
+      final sheet = book['Laporan Keuangan'];
+      sheet.appendRow([xls.TextCellValue('LAPORAN KEUANGAN FINTRACK')]);
+      sheet.appendRow([xls.TextCellValue(_dateLabel(start, end))]);
+      sheet.appendRow([xls.TextCellValue('Saldo awal'), xls.IntCellValue(opening)]);
+      sheet.appendRow([xls.TextCellValue('Pemasukan'), xls.IntCellValue(income)]);
+      sheet.appendRow([xls.TextCellValue('Pengeluaran'), xls.IntCellValue(expense)]);
+      sheet.appendRow([xls.TextCellValue('Saldo akhir'), xls.IntCellValue(opening + income - expense)]);
+      sheet.appendRow([]);
+      sheet.appendRow([
+        xls.TextCellValue('Tanggal'), xls.TextCellValue('Jenis'),
+        xls.TextCellValue('Keterangan'), xls.TextCellValue('Kategori'),
+        xls.TextCellValue('Nominal'),
+      ]);
+      final sorted = [...items]..sort((x, y) => x.occurredAt.compareTo(y.occurredAt));
+      for (final tx in sorted) {
+        sheet.appendRow([
+          xls.TextCellValue(DateFormat('yyyy-MM-dd').format(tx.occurredAt)),
+          xls.TextCellValue(tx.type == 'income' ? 'Pemasukan' : 'Pengeluaran'),
+          xls.TextCellValue(tx.title),
+          xls.TextCellValue(tx.category ?? 'Tanpa kategori'),
+          xls.IntCellValue(tx.amount),
+        ]);
+      }
+      final bytes = book.encode();
+      if (bytes == null) throw StateError('Gagal membuat file Excel.');
+      final stamp = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
+      await FilePicker.platform.saveFile(
+        dialogTitle: 'Simpan laporan Excel',
+        fileName: 'fintrack_laporan_$stamp.xlsx',
+        type: FileType.custom,
+        allowedExtensions: ['xlsx'],
+        bytes: Uint8List.fromList(bytes),
+      );
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ekspor Excel gagal: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
+  Future<void> _savePdf(List<FinanceTransaction> items, int income,
+      int expense, int opening, DateTime start, DateTime end) async {
+    setState(() => _exporting = true);
+    try {
+      final doc = pw.Document();
+      final detail = <List<String>>[
+        ['Tanggal', 'Jenis', 'Keterangan', 'Kategori', 'Nominal'],
+        ...([...items]..sort((x, y) => x.occurredAt.compareTo(y.occurredAt)))
+            .map((tx) => [
+              DateFormat('dd/MM/yy').format(tx.occurredAt),
+              tx.type == 'income' ? 'Masuk' : 'Keluar',
+              tx.title, tx.category ?? '-',
+              _rupiah.format(tx.amount),
+            ]),
+      ];
+      doc.addPage(pw.MultiPage(build: (context) => [
+        pw.Text('LAPORAN KEUANGAN FINTRACK',
+          style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 6),
+        pw.Text(_dateLabel(start, end)),
+        pw.SizedBox(height: 12),
+        pw.Table.fromTextArray(data: [
+          ['Ringkasan', 'Nominal'],
+          ['Saldo awal', _rupiah.format(opening)],
+          ['Pemasukan', _rupiah.format(income)],
+          ['Pengeluaran', _rupiah.format(expense)],
+          ['Saldo akhir', _rupiah.format(opening + income - expense)],
+        ]),
+        pw.SizedBox(height: 16),
+        pw.Text('Rincian transaksi',
+          style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 8),
+        pw.Table.fromTextArray(data: detail),
+      ]));
+      final bytes = await doc.save();
+      final stamp = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
+      await FilePicker.platform.saveFile(
+        dialogTitle: 'Simpan laporan PDF',
+        fileName: 'fintrack_laporan_$stamp.pdf',
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+        bytes: bytes,
+      );
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ekspor PDF gagal: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
   }
 
   @override
@@ -1613,11 +1745,20 @@ class _FinanceReportsSectionState extends State<FinanceReportsSection> {
             labelText: 'Periode laporan',
             border: OutlineInputBorder(),
           ),
-          items: const ['Bulan ini', 'Bulan lalu', '30 hari']
+          items: const ['Bulan ini', 'Bulan lalu', '30 hari', 'Rentang tanggal']
               .map((value) => DropdownMenuItem(value: value, child: Text(value)))
               .toList(),
-          onChanged: (value) => setState(() => _period = value ?? 'Bulan ini'),
+          onChanged: (value) {
+            if (value == 'Rentang tanggal') { _chooseRange(); }
+            else { setState(() => _period = value ?? 'Bulan ini'); }
+          },
         ),
+        if (_period == 'Rentang tanggal' && _customStart != null && _customEnd != null)
+          Align(alignment: Alignment.centerLeft, child: TextButton.icon(
+            onPressed: _chooseRange,
+            icon: const Icon(Icons.date_range),
+            label: Text(_dateLabel(start, end)),
+          )),
         const SizedBox(height: 8),
         StreamBuilder<List<FinanceTransaction>>(
           stream: widget.database.watchTransactions(),
@@ -1674,9 +1815,50 @@ class _FinanceReportsSectionState extends State<FinanceReportsSection> {
               ..sort((a, b) => b.value.compareTo(a.value));
             final maxCategory = categories.isEmpty ? 1 : categories.first.value;
             final net = income - expense;
+            final openingFlow = allTransactions.where((tx) =>
+              tx.type != 'transfer' && tx.occurredAt.isBefore(start)
+            ).fold<int>(0, (sum, tx) =>
+              sum + (tx.type == 'income' ? tx.amount : -tx.amount));
+            final openingAccounts = widget.database.watchAccounts().first;
 
             return Column(
               children: [
+                FutureBuilder<List<Account>>(
+                  future: openingAccounts,
+                  builder: (context, accountSnapshot) {
+                    final opening = (accountSnapshot.data ?? const <Account>[])
+                      .fold<int>(0, (sum, account) => sum + account.openingBalance)
+                      + openingFlow;
+                    return Column(children: [
+                      Wrap(spacing: 8, runSpacing: 8, children: [
+                        OutlinedButton.icon(
+                          onPressed: _exporting ? null : () => _saveExcel(
+                            transactions, income, expense, opening, start, end),
+                          icon: const Icon(Icons.table_view),
+                          label: const Text('Ekspor Excel'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _exporting ? null : () => _savePdf(
+                            transactions, income, expense, opening, start, end),
+                          icon: const Icon(Icons.picture_as_pdf),
+                          label: const Text('Ekspor PDF'),
+                        ),
+                      ]),
+                      if (_exporting) const Padding(
+                        padding: EdgeInsets.only(top: 8),
+                        child: LinearProgressIndicator(),
+                      ),
+                      Card(child: ListTile(
+                        title: const Text('Saldo awal periode'),
+                        trailing: Text(_rupiah.format(opening)),
+                      )),
+                      Card(child: ListTile(
+                        title: const Text('Saldo akhir periode'),
+                        trailing: Text(_rupiah.format(opening + net)),
+                      )),
+                    ]);
+                  },
+                ),
                 Row(
                   children: [
                     Expanded(child: _ReportMetric(
