@@ -12,7 +12,7 @@ part 'app_database.g.dart';
 final databaseProvider = Provider<AppDatabase>((ref) =>
     throw UnimplementedError('Database provider not initialized'));
 
-@DriftDatabase(tables: [Accounts, FinanceTransactions, LedgerEntries, Transfers, Budgets])
+@DriftDatabase(tables: [Accounts, FinanceTransactions, LedgerEntries, Transfers, Budgets, Bills])
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.executor);
 
@@ -25,7 +25,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -37,12 +37,102 @@ class AppDatabase extends _$AppDatabase {
       if (from < 2) {
         await m.createTable(budgets);
       }
+      if (from < 3) {
+        await m.createTable(bills);
+      }
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
       await customStatement('PRAGMA journal_mode = WAL');
     },
   );
+
+  Stream<List<Bill>> watchBills() =>
+      (select(bills)..orderBy([
+        (b) => OrderingTerm.asc(b.isPaid),
+        (b) => OrderingTerm.asc(b.dueDate),
+      ])).watch();
+
+  Future<void> addBill({
+    required String title,
+    required String category,
+    required int amount,
+    required DateTime dueDate,
+    required bool isMonthly,
+  }) async {
+    if (title.trim().isEmpty || category.trim().isEmpty || amount <= 0) {
+      throw ArgumentError('Data tagihan tidak valid.');
+    }
+    await into(bills).insert(BillsCompanion.insert(
+      id: _uuid.v4(),
+      title: title.trim(),
+      category: category.trim(),
+      amount: amount,
+      dueDate: DateTime(dueDate.year, dueDate.month, dueDate.day),
+      isMonthly: Value(isMonthly),
+      createdAt: DateTime.now(),
+    ));
+  }
+
+  Future<void> markBillPaid({
+    required String billId,
+    required String accountId,
+  }) async {
+    final bill = await (select(bills)..where((b) => b.id.equals(billId)))
+        .getSingleOrNull();
+    if (bill == null) throw StateError('Tagihan tidak ditemukan.');
+    if (bill.isPaid) throw StateError('Tagihan sudah ditandai lunas.');
+    final account = await (select(accounts)..where((a) =>
+      a.id.equals(accountId) & a.archived.equals(false))).getSingleOrNull();
+    if (account == null) throw StateError('Rekening tidak ditemukan.');
+
+    final now = DateTime.now();
+    final transactionId = _uuid.v4();
+    await transaction(() async {
+      await into(financeTransactions).insert(FinanceTransactionsCompanion.insert(
+        id: transactionId,
+        type: 'expense',
+        accountId: accountId,
+        amount: bill.amount,
+        title: 'Pembayaran: ${bill.title}',
+        category: Value(bill.category),
+        occurredAt: now,
+        createdAt: now,
+      ));
+      await into(ledgerEntries).insert(LedgerEntriesCompanion.insert(
+        id: _uuid.v4(),
+        transactionId: transactionId,
+        accountId: accountId,
+        amountDelta: -bill.amount,
+        createdAt: now,
+      ));
+      await (update(bills)..where((b) => b.id.equals(billId))).write(
+        BillsCompanion(isPaid: const Value(true), paidAt: Value(now)),
+      );
+
+      if (bill.isMonthly) {
+        final nextMonth = DateTime(bill.dueDate.year, bill.dueDate.month + 1);
+        final lastDay = DateTime(nextMonth.year, nextMonth.month + 1, 0).day;
+        final nextDueDate = DateTime(
+          nextMonth.year,
+          nextMonth.month,
+          bill.dueDate.day > lastDay ? lastDay : bill.dueDate.day,
+        );
+        await into(bills).insert(BillsCompanion.insert(
+          id: _uuid.v4(),
+          title: bill.title,
+          category: bill.category,
+          amount: bill.amount,
+          dueDate: nextDueDate,
+          isMonthly: const Value(true),
+          createdAt: now,
+        ));
+      }
+    });
+  }
+
+  Future<void> deleteBill(String billId) =>
+      (delete(bills)..where((b) => b.id.equals(billId))).go();
 
   Stream<List<Budget>> watchBudgetsForMonth(DateTime month) {
     final monthStart = DateTime(month.year, month.month);
