@@ -25,7 +25,7 @@ void main() {
     expect(find.text('Laporan'), findsOneWidget);
     expect(find.text('Lainnya'), findsOneWidget);
     expect(find.text('Total saldo'), findsOneWidget);
-    expect(find.text('Belum ada rekening. Tambahkan rekening pertama.'), findsOneWidget);
+    expect(find.text('Aksi cepat'), findsOneWidget);
 
     await db.closeDatabase();
   });
