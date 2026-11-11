@@ -113,6 +113,42 @@ void main() {
     expect(await db.watchTransactions().first, isEmpty);
   });
 
+  test('monthly budget can be created and updated', () async {
+    final november = DateTime(2026, 11, 1);
+    await db.saveBudget(
+      category: 'Makanan',
+      monthlyLimit: 1000000,
+      month: november,
+    );
+    var budgets = await db.watchBudgetsForMonth(november).first;
+    expect(budgets, hasLength(1));
+    expect(budgets.single.monthlyLimit, 1000000);
+
+    await db.saveBudget(
+      category: 'Makanan',
+      monthlyLimit: 1250000,
+      month: DateTime(2026, 11, 20),
+    );
+    budgets = await db.watchBudgetsForMonth(november).first;
+    expect(budgets, hasLength(1));
+    expect(budgets.single.monthlyLimit, 1250000);
+    expect(await db.watchBudgetsForMonth(DateTime(2026, 12)).first, isEmpty);
+  });
+
+  test('monthly budget can be deleted', () async {
+    final month = DateTime(2026, 11);
+    await db.saveBudget(
+      category: 'Transportasi',
+      monthlyLimit: 500000,
+      month: month,
+    );
+    final budget = (await db.watchBudgetsForMonth(month).first).single;
+
+    await db.deleteBudget(budget.id);
+
+    expect(await db.watchBudgetsForMonth(month).first, isEmpty);
+  });
+
   test('invalid amount is rejected', () async {
     await db.addAccount('Tunai', 'Tunai', 0);
     final account = (await db.watchAccounts().first).single;
