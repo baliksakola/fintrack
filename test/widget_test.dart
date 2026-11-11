@@ -1,11 +1,13 @@
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fintrack/core/database/app_database.dart';
 import 'package:fintrack/main.dart';
 
 void main() {
   testWidgets('FinTrack dashboard renders', (tester) async {
+    await initializeDateFormatting('id_ID');
     final db = AppDatabase(NativeDatabase.memory());
 
     await tester.pumpWidget(
