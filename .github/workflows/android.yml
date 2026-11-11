@@ -25,9 +25,11 @@ jobs:
           fi
 
       - name: Set Android compile SDK to 36
+        shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           candidates = [
               Path("android/app/build.gradle.kts"),
@@ -38,21 +40,24 @@ jobs:
               raise SystemExit("Android app Gradle file was not generated")
 
           content = app_gradle.read_text()
-          if app_gradle.suffix == ".kts":
-              content = content.replace(
-                  "compileSdk = flutter.compileSdkVersion",
-                  "compileSdk = 36",
+          updated, count = re.subn(
+              r"(?m)^([ \t]*)(?:compileSdk|compileSdkVersion)(?:[ \t]*=[ \t]*|[ \t]+)(?:flutter\.compileSdkVersion|[0-9]+)",
+              lambda match: match.group(1) + (
+                  "compileSdk = 36" if app_gradle.suffix == ".kts"
+                  else "compileSdkVersion 36"
+              ),
+              content,
+          )
+          if count == 0:
+              raise SystemExit(
+                  "Could not find compileSdk declaration in " + str(app_gradle)
+                  + "\\n" + content
               )
-          else:
-              content = content.replace(
-                  "compileSdkVersion flutter.compileSdkVersion",
-                  "compileSdkVersion 36",
-              )
-          app_gradle.write_text(content)
-
-          if "compileSdk = 36" not in content and "compileSdkVersion 36" not in content:
-              raise SystemExit("Could not set compileSdk to 36")
-          print(f"Configured {app_gradle} to compileSdk 36")
+          app_gradle.write_text(updated)
+          print("Updated " + str(app_gradle) + " compileSdk declaration:")
+          for line in updated.splitlines():
+              if "compileSdk" in line:
+                  print(line)
           PY
 
       - name: Install dependencies
