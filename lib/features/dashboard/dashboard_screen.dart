@@ -1631,7 +1631,8 @@ class _FinanceReportsSectionState extends State<FinanceReportsSection> {
       '${DateFormat('dd MMM yyyy', 'id_ID').format(end.subtract(const Duration(days: 1)))}';
 
   Future<void> _saveExcel(List<FinanceTransaction> items, int income,
-      int expense, int opening, DateTime start, DateTime end) async {
+      int expense, int opening, Map<String, int> categories,
+      DateTime start, DateTime end) async {
     setState(() => _exporting = true);
     try {
       final book = xls.Excel.createExcel();
@@ -1642,6 +1643,17 @@ class _FinanceReportsSectionState extends State<FinanceReportsSection> {
       sheet.appendRow([xls.TextCellValue('Pemasukan'), xls.IntCellValue(income)]);
       sheet.appendRow([xls.TextCellValue('Pengeluaran'), xls.IntCellValue(expense)]);
       sheet.appendRow([xls.TextCellValue('Saldo akhir'), xls.IntCellValue(opening + income - expense)]);
+      sheet.appendRow([]);
+      sheet.appendRow([xls.TextCellValue('REKAP PENGELUARAN PER KATEGORI')]);
+      sheet.appendRow([xls.TextCellValue('Kategori'), xls.TextCellValue('Total')]);
+      final sortedCategories = categories.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      for (final entry in sortedCategories) {
+        sheet.appendRow([
+          xls.TextCellValue(entry.key),
+          xls.IntCellValue(entry.value),
+        ]);
+      }
       sheet.appendRow([]);
       sheet.appendRow([
         xls.TextCellValue('Tanggal'), xls.TextCellValue('Jenis'),
@@ -1680,7 +1692,8 @@ class _FinanceReportsSectionState extends State<FinanceReportsSection> {
   }
 
   Future<void> _savePdf(List<FinanceTransaction> items, int income,
-      int expense, int opening, DateTime start, DateTime end) async {
+      int expense, int opening, Map<String, int> categories,
+      DateTime start, DateTime end) async {
     setState(() => _exporting = true);
     try {
       final doc = pw.Document();
@@ -1693,6 +1706,15 @@ class _FinanceReportsSectionState extends State<FinanceReportsSection> {
               tx.title, tx.category ?? '-',
               _rupiah.format(tx.amount),
             ]),
+      ];
+      final sortedCategories = categories.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      final categoryRows = <List<String>>[
+        ['Kategori', 'Total pengeluaran'],
+        ...sortedCategories.map((entry) => [
+          entry.key,
+          _rupiah.format(entry.value),
+        ]),
       ];
       doc.addPage(pw.MultiPage(build: (context) => [
         pw.Text('LAPORAN KEUANGAN FINTRACK',
@@ -1707,6 +1729,11 @@ class _FinanceReportsSectionState extends State<FinanceReportsSection> {
           ['Pengeluaran', _rupiah.format(expense)],
           ['Saldo akhir', _rupiah.format(opening + income - expense)],
         ]),
+        pw.SizedBox(height: 16),
+        pw.Text('Pengeluaran per kategori',
+          style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 8),
+        pw.TableHelper.fromTextArray(data: categoryRows),
         pw.SizedBox(height: 16),
         pw.Text('Rincian transaksi',
           style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
@@ -1837,13 +1864,15 @@ class _FinanceReportsSectionState extends State<FinanceReportsSection> {
                       Wrap(spacing: 8, runSpacing: 8, children: [
                         OutlinedButton.icon(
                           onPressed: _exporting ? null : () => _saveExcel(
-                            transactions, income, expense, opening, start, end),
+                            transactions, income, expense, opening,
+                            expenseByCategory, start, end),
                           icon: const Icon(Icons.table_view),
                           label: const Text('Ekspor Excel'),
                         ),
                         OutlinedButton.icon(
                           onPressed: _exporting ? null : () => _savePdf(
-                            transactions, income, expense, opening, start, end),
+                            transactions, income, expense, opening,
+                            expenseByCategory, start, end),
                           icon: const Icon(Icons.picture_as_pdf),
                           label: const Text('Ekspor PDF'),
                         ),
