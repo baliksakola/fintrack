@@ -517,8 +517,8 @@ class AppDatabase extends _$AppDatabase {
     final transferRows = rows('transfers');
     final budgetRows = rows('budgets');
     final billRows = rows('bills');
-    final debtRows = rows('debts');
-    final debtPaymentRows = rows('debtPayments');
+    final debtRows = decoded['debts'] is List ? rows('debts') : <Map<String, dynamic>>[];
+    final debtPaymentRows = decoded['debtPayments'] is List ? rows('debtPayments') : <Map<String, dynamic>>[];
 
     DateTime date(Map<String, dynamic> row, String key) {
       final value = row[key];
