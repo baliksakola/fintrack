@@ -5,6 +5,9 @@ import '../../core/database/app_database.dart';
 
 final _rupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
+const _incomeCategories = ['Gaji', 'Bonus', 'Usaha', 'Investasi', 'Hadiah', 'Lainnya'];
+const _expenseCategories = ['Makanan', 'Transportasi', 'Belanja', 'Tagihan', 'Kesehatan', 'Pendidikan', 'Hiburan', 'Lainnya'];
+
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
@@ -99,76 +102,7 @@ class DashboardScreen extends ConsumerWidget {
                 },
               ),
               const SizedBox(height: 24),
-              Text('Transaksi terbaru', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 8),
-              StreamBuilder<List<FinanceTransaction>>(
-                stream: db.watchTransactions(),
-                builder: (context, snapshot) {
-                  final items = snapshot.data ?? [];
-                  if (items.isEmpty) {
-                    return const Card(
-                      child: Padding(
-                        padding: EdgeInsets.all(20),
-                        child: Text('Belum ada transaksi yang dicatat.'),
-                      ),
-                    );
-                  }
-                  return Column(
-                    children: items.take(20).map((tx) {
-                      final income = tx.type == 'income';
-                      final transfer = tx.type == 'transfer';
-                      return Card(
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            child: Icon(transfer ? Icons.swap_horiz : income ? Icons.south_west : Icons.north_east),
-                          ),
-                          title: Text(tx.title),
-                          subtitle: Text(DateFormat('dd MMM yyyy, HH:mm', 'id_ID').format(tx.occurredAt)),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                '${income ? '+' : transfer ? '' : '-'}${_rupiah.format(tx.amount)}',
-                                style: TextStyle(fontWeight: FontWeight.w600,
-                                  color: income ? Colors.green : transfer ? null : Colors.red),
-                              ),
-                              PopupMenuButton<String>(
-                                tooltip: 'Aksi transaksi',
-                                onSelected: (action) {
-                                  if (action == 'edit' && !transfer) {
-                                    _showEditTransactionDialog(context, db, tx);
-                                  } else if (action == 'delete') {
-                                    _confirmDeleteTransaction(context, db, tx);
-                                  }
-                                },
-                                itemBuilder: (context) => [
-                                  if (!transfer)
-                                    const PopupMenuItem(
-                                      value: 'edit',
-                                      child: ListTile(
-                                        dense: true,
-                                        leading: Icon(Icons.edit_outlined),
-                                        title: Text('Edit'),
-                                      ),
-                                    ),
-                                  const PopupMenuItem(
-                                    value: 'delete',
-                                    child: ListTile(
-                                      dense: true,
-                                      leading: Icon(Icons.delete_outline),
-                                      title: Text('Hapus'),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  );
-                },
-              ),
+              TransactionHistorySection(database: db),
             ],
           );
         },
@@ -227,6 +161,8 @@ Future<void> _showTransactionDialog(BuildContext context, AppDatabase db, String
   final title = TextEditingController();
   final amount = TextEditingController();
   String accountId = accounts.first.id;
+  final categories = type == 'income' ? _incomeCategories : _expenseCategories;
+  String category = categories.first;
   await showDialog<void>(context: context, builder: (dialogContext) => StatefulBuilder(
     builder: (context, setState) => AlertDialog(
       title: Text(type == 'income' ? 'Catat pemasukan' : 'Catat pengeluaran'),
@@ -241,6 +177,13 @@ Future<void> _showTransactionDialog(BuildContext context, AppDatabase db, String
           onChanged: (v) => setState(() => accountId = v ?? accounts.first.id),
           decoration: const InputDecoration(labelText: 'Rekening'),
         ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          initialValue: category,
+          items: categories.map((value) => DropdownMenuItem(value: value, child: Text(value))).toList(),
+          onChanged: (value) => setState(() => category = value ?? categories.first),
+          decoration: const InputDecoration(labelText: 'Kategori'),
+        ),
       ]),
       actions: [
         TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Batal')),
@@ -248,9 +191,9 @@ Future<void> _showTransactionDialog(BuildContext context, AppDatabase db, String
           final value = int.tryParse(amount.text.replaceAll('.', '').replaceAll(',', '')) ?? 0;
           try {
             if (type == 'income') {
-              await db.addIncome(accountId: accountId, amount: value, title: title.text);
+              await db.addIncome(accountId: accountId, amount: value, title: title.text, category: category);
             } else {
-              await db.addExpense(accountId: accountId, amount: value, title: title.text);
+              await db.addExpense(accountId: accountId, amount: value, title: title.text, category: category);
             }
             if (dialogContext.mounted) Navigator.pop(dialogContext);
           } catch (e) {
@@ -330,6 +273,8 @@ Future<void> _showEditTransactionDialog(
   String accountId = accounts.any((a) => a.id == transaction.accountId)
       ? transaction.accountId
       : accounts.first.id;
+  final categories = transaction.type == 'income' ? _incomeCategories : _expenseCategories;
+  String category = categories.contains(transaction.category) ? transaction.category! : categories.first;
 
   await showDialog<void>(
     context: context,
@@ -358,6 +303,13 @@ Future<void> _showEditTransactionDialog(
               onChanged: (value) => setState(() => accountId = value ?? accountId),
               decoration: const InputDecoration(labelText: 'Rekening'),
             ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              initialValue: category,
+              items: categories.map((value) => DropdownMenuItem(value: value, child: Text(value))).toList(),
+              onChanged: (value) => setState(() => category = value ?? category),
+              decoration: const InputDecoration(labelText: 'Kategori'),
+            ),
           ],
         ),
         actions: [
@@ -376,6 +328,7 @@ Future<void> _showEditTransactionDialog(
                   accountId: accountId,
                   amount: value,
                   title: title.text,
+                  category: category,
                 );
                 if (dialogContext.mounted) Navigator.pop(dialogContext);
               } catch (e) {
@@ -428,3 +381,155 @@ Future<void> _confirmDeleteTransaction(
     }
   }
 }
+
+class TransactionHistorySection extends StatefulWidget {
+  const TransactionHistorySection({super.key, required this.database});
+
+  final AppDatabase database;
+
+  @override
+  State<TransactionHistorySection> createState() => _TransactionHistorySectionState();
+}
+
+class _TransactionHistorySectionState extends State<TransactionHistorySection> {
+  final _searchController = TextEditingController();
+  String _typeFilter = 'Semua';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Riwayat transaksi', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _searchController,
+          decoration: InputDecoration(
+            hintText: 'Cari keterangan atau kategori',
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: IconButton(
+              tooltip: 'Hapus pencarian',
+              onPressed: () {
+                _searchController.clear();
+                setState(() {});
+              },
+              icon: const Icon(Icons.close),
+            ),
+            border: const OutlineInputBorder(),
+          ),
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          initialValue: _typeFilter,
+          decoration: const InputDecoration(
+            labelText: 'Filter jenis transaksi',
+            border: OutlineInputBorder(),
+          ),
+          items: const ['Semua', 'Pemasukan', 'Pengeluaran', 'Transfer']
+              .map((value) => DropdownMenuItem(value: value, child: Text(value)))
+              .toList(),
+          onChanged: (value) => setState(() => _typeFilter = value ?? 'Semua'),
+        ),
+        const SizedBox(height: 8),
+        StreamBuilder<List<FinanceTransaction>>(
+          stream: widget.database.watchTransactions(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return const Text('Gagal memuat riwayat transaksi.');
+            }
+            final query = _searchController.text.trim().toLowerCase();
+            final type = switch (_typeFilter) {
+              'Pemasukan' => 'income',
+              'Pengeluaran' => 'expense',
+              'Transfer' => 'transfer',
+              _ => null,
+            };
+            final items = (snapshot.data ?? []).where((tx) {
+              final matchesType = type == null || tx.type == type;
+              final matchesSearch = query.isEmpty ||
+                  tx.title.toLowerCase().contains(query) ||
+                  (tx.category ?? '').toLowerCase().contains(query);
+              return matchesType && matchesSearch;
+            }).toList();
+
+            if (items.isEmpty) {
+              return const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(20),
+                  child: Text('Tidak ada transaksi yang cocok dengan filter.'),
+                ),
+              );
+            }
+            return Column(
+              children: items.map((tx) {
+                final income = tx.type == 'income';
+                final transfer = tx.type == 'transfer';
+                final date = DateFormat('dd MMM yyyy, HH:mm', 'id_ID').format(tx.occurredAt);
+                return Card(
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      child: Icon(transfer ? Icons.swap_horiz : income ? Icons.south_west : Icons.north_east),
+                    ),
+                    title: Text(tx.title),
+                    subtitle: Text(tx.category == null || tx.category!.isEmpty
+                        ? date
+                        : '$date • ${tx.category}'),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${income ? '+' : transfer ? '' : '-'}${_rupiah.format(tx.amount)}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: income ? Colors.green : transfer ? null : Colors.red,
+                          ),
+                        ),
+                        PopupMenuButton<String>(
+                          tooltip: 'Aksi transaksi',
+                          onSelected: (action) {
+                            if (action == 'edit' && !transfer) {
+                              _showEditTransactionDialog(context, widget.database, tx);
+                            } else if (action == 'delete') {
+                              _confirmDeleteTransaction(context, widget.database, tx);
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            if (!transfer)
+                              const PopupMenuItem(
+                                value: 'edit',
+                                child: ListTile(
+                                  dense: true,
+                                  leading: Icon(Icons.edit_outlined),
+                                  title: Text('Edit'),
+                                ),
+                              ),
+                            const PopupMenuItem(
+                              value: 'delete',
+                              child: ListTile(
+                                dense: true,
+                                leading: Icon(Icons.delete_outline),
+                                title: Text('Hapus'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
