@@ -1,6 +1,9 @@
+import 'dart:io';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'tables.dart';
 
@@ -9,30 +12,46 @@ part 'app_database.g.dart';
 final databaseProvider = Provider<AppDatabase>((ref) =>
     throw UnimplementedError('Database provider not initialized'));
 
-@DriftDatabase(tables: [Accounts, FinanceTransactions, LedgerEntries])
+@DriftDatabase(tables: [Accounts, FinanceTransactions, LedgerEntries, Transfers])
 class AppDatabase extends _$AppDatabase {
-  AppDatabase() : super(NativeDatabase.memory());
+  AppDatabase(QueryExecutor executor) : super(executor);
+
+  static const _uuid = Uuid();
+
+  static Future<AppDatabase> open() async {
+    final dir = await getApplicationDocumentsDirectory();
+    final file = File(p.join(dir.path, 'fintrack.sqlite'));
+    return AppDatabase(NativeDatabase.createInBackground(file));
+  }
 
   @override
   int get schemaVersion => 1;
 
-  static const _uuid = Uuid();
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onCreate: (m) async {
+      await m.createAll();
+      await customStatement('PRAGMA foreign_keys = ON');
+    },
+    beforeOpen: (details) async {
+      await customStatement('PRAGMA foreign_keys = ON');
+      await customStatement('PRAGMA journal_mode = WAL');
+    },
+  );
 
   Future<void> addAccount(String name, String type, int openingBalance) async {
     if (name.trim().isEmpty || openingBalance < 0) {
       throw ArgumentError('Data rekening tidak valid.');
     }
     await into(accounts).insert(AccountsCompanion.insert(
-      id: _uuid.v4(),
-      name: name.trim(),
-      type: type,
-      openingBalance: Value(openingBalance),
-      createdAt: DateTime.now(),
+      id: _uuid.v4(), name: name.trim(), type: type,
+      openingBalance: Value(openingBalance), createdAt: DateTime.now(),
     ));
   }
 
   Stream<List<Account>> watchAccounts() =>
-      (select(accounts)..where((a) => a.archived.equals(false))).watch();
+      (select(accounts)..where((a) => a.archived.equals(false))
+        ..orderBy([(a) => OrderingTerm.asc(a.name)])).watch();
 
   Stream<int> watchTotalBalance() => customSelect(
     'SELECT COALESCE((SELECT SUM(opening_balance) FROM accounts WHERE archived = 0), 0) + '
@@ -40,18 +59,17 @@ class AppDatabase extends _$AppDatabase {
     readsFrom: {accounts, ledgerEntries},
   ).watch().map((rows) => rows.first.read<int>('total'));
 
+  Stream<List<FinanceTransaction>> watchTransactions() =>
+      (select(financeTransactions)..orderBy([(t) => OrderingTerm.desc(t.occurredAt)])).watch();
+
   Future<void> addIncome({
-    required String accountId,
-    required int amount,
-    required String title,
-    String? category,
+    required String accountId, required int amount,
+    required String title, String? category,
   }) => _addTransaction('income', accountId, amount, title, category);
 
   Future<void> addExpense({
-    required String accountId,
-    required int amount,
-    required String title,
-    String? category,
+    required String accountId, required int amount,
+    required String title, String? category,
   }) => _addTransaction('expense', accountId, amount, title, category);
 
   Future<void> _addTransaction(
@@ -76,6 +94,42 @@ class AppDatabase extends _$AppDatabase {
       await into(ledgerEntries).insert(LedgerEntriesCompanion.insert(
         id: _uuid.v4(), transactionId: id, accountId: accountId,
         amountDelta: delta, createdAt: now,
+      ));
+    });
+  }
+
+  Future<void> createTransfer({
+    required String fromAccountId,
+    required String toAccountId,
+    required int amount,
+    required String title,
+  }) async {
+    if (amount <= 0 || title.trim().isEmpty || fromAccountId == toAccountId) {
+      throw ArgumentError('Data transfer tidak valid.');
+    }
+    final from = await (select(accounts)..where((a) =>
+      a.id.equals(fromAccountId) & a.archived.equals(false))).getSingleOrNull();
+    final to = await (select(accounts)..where((a) =>
+      a.id.equals(toAccountId) & a.archived.equals(false))).getSingleOrNull();
+    if (from == null || to == null) throw StateError('Rekening tidak ditemukan.');
+    final id = _uuid.v4();
+    final now = DateTime.now();
+    await transaction(() async {
+      await into(financeTransactions).insert(FinanceTransactionsCompanion.insert(
+        id: id, type: 'transfer', accountId: fromAccountId, amount: amount,
+        title: title.trim(), occurredAt: now, createdAt: now,
+      ));
+      await into(transfers).insert(TransfersCompanion.insert(
+        id: _uuid.v4(), transactionId: id, fromAccountId: fromAccountId,
+        toAccountId: toAccountId, createdAt: now,
+      ));
+      await into(ledgerEntries).insert(LedgerEntriesCompanion.insert(
+        id: _uuid.v4(), transactionId: id, accountId: fromAccountId,
+        amountDelta: -amount, createdAt: now,
+      ));
+      await into(ledgerEntries).insert(LedgerEntriesCompanion.insert(
+        id: _uuid.v4(), transactionId: id, accountId: toAccountId,
+        amountDelta: amount, createdAt: now,
       ));
     });
   }
