@@ -60,6 +60,85 @@ jobs:
                   print(line)
           PY
 
+      - name: Configure Android notification scheduling
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          gradle_candidates = [
+              Path("android/app/build.gradle.kts"),
+              Path("android/app/build.gradle"),
+          ]
+          gradle = next((p for p in gradle_candidates if p.exists()), None)
+          if gradle is None:
+              raise SystemExit("Android app Gradle file not found")
+
+          content = gradle.read_text()
+          if gradle.suffix == ".kts":
+              if "isCoreLibraryDesugaringEnabled" not in content:
+                  content, count = re.subn(
+                      r"(compileOptions\\s*\\{)",
+                      r"\\1\\n        isCoreLibraryDesugaringEnabled = true",
+                      content, count=1,
+                  )
+                  if count == 0:
+                      raise SystemExit("compileOptions block not found")
+              dependency = 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")'
+              block = "dependencies {"
+              addition = dependency
+          else:
+              if "coreLibraryDesugaringEnabled true" not in content:
+                  content, count = re.subn(
+                      r"(compileOptions\\s*\\{)",
+                      r"\\1\\n        coreLibraryDesugaringEnabled true",
+                      content, count=1,
+                  )
+                  if count == 0:
+                      raise SystemExit("compileOptions block not found")
+              dependency = "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'"
+              block = "dependencies {"
+              addition = dependency
+
+          if dependency not in content:
+              if block in content:
+                  content = content.replace(block, block + "\\n    " + addition, 1)
+              else:
+                  content += "\\ndependencies {\\n    " + addition + "\\n}\\n"
+          gradle.write_text(content)
+
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          if not manifest.exists():
+              raise SystemExit("AndroidManifest.xml not found")
+          xml = manifest.read_text()
+          permission = '    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />'
+          if "android.permission.RECEIVE_BOOT_COMPLETED" not in xml:
+              xml, count = re.subn(r"(<manifest\\b[^>]*>)", r"\\1\\n" + permission, xml, count=1)
+              if count == 0:
+                  raise SystemExit("Manifest root tag not found")
+
+          receivers = '''
+              <receiver
+                  android:exported="false"
+                  android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+              <receiver
+                  android:exported="false"
+                  android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+                  <intent-filter>
+                      <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                      <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                      <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                      <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+                  </intent-filter>
+              </receiver>
+          '''
+          if "ScheduledNotificationReceiver" not in xml:
+              xml = xml.replace("</application>", receivers + "\\n    </application>", 1)
+          manifest.write_text(xml)
+          print("Configured notification permissions, reboot receivers and Java desugaring.")
+          PY
+
       - name: Install dependencies
         run: flutter pub get
 
