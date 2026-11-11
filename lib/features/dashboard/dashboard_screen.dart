@@ -154,7 +154,7 @@ Future<void> _showAccountDialog(BuildContext context, AppDatabase db) async {
           decoration: const InputDecoration(labelText: 'Saldo awal (Rp)')),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
-          value: type,
+          initialValue: type,
           items: const ['Bank', 'E-Wallet', 'Tunai', 'Tabungan', 'Lainnya']
             .map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
           onChanged: (v) => setState(() => type = v ?? 'Bank'),
@@ -169,7 +169,11 @@ Future<void> _showAccountDialog(BuildContext context, AppDatabase db) async {
             await db.addAccount(name.text, type, amount);
             if (dialogContext.mounted) Navigator.pop(dialogContext);
           } catch (e) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+            if (dialogContext.mounted) {
+              ScaffoldMessenger.of(dialogContext).showSnackBar(
+                SnackBar(content: Text(e.toString())),
+              );
+            }
           }
         }, child: const Text('Simpan')),
       ],
@@ -196,7 +200,7 @@ Future<void> _showTransactionDialog(BuildContext context, AppDatabase db, String
           decoration: const InputDecoration(labelText: 'Nominal (Rp)')),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
-          value: accountId,
+          initialValue: accountId,
           items: accounts.map((a) => DropdownMenuItem(value: a.id, child: Text(a.name))).toList(),
           onChanged: (v) => setState(() => accountId = v ?? accounts.first.id),
           decoration: const InputDecoration(labelText: 'Rekening'),
@@ -242,12 +246,14 @@ Future<void> _showTransferDialog(BuildContext context, AppDatabase db) async {
           decoration: const InputDecoration(labelText: 'Nominal (Rp)')),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
-          value: fromId,
+          initialValue: fromId,
           items: accounts.map((a) => DropdownMenuItem(value: a.id, child: Text('Dari: ${a.name}'))).toList(),
-          onChanged: (v) => setState(() { fromId = v ?? fromId; if (fromId == toId) toId = accounts.firstWhere((a) => a.id != fromId).id; }),
+          onChanged: (v) => setState(() { fromId = v ?? fromId; if (fromId == toId) {
+            toId = accounts.firstWhere((a) => a.id != fromId).id;
+          } }),
         ),
         DropdownButtonFormField<String>(
-          value: toId,
+          initialValue: toId,
           items: accounts.map((a) => DropdownMenuItem(value: a.id, child: Text('Ke: ${a.name}'))).toList(),
           onChanged: (v) => setState(() => toId = v ?? toId),
         ),
