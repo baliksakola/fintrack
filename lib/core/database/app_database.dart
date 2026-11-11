@@ -139,6 +139,7 @@ class AppDatabase extends _$AppDatabase {
     required String accountId,
     required int amount,
     required String title,
+    String? category,
   }) async {
     if (amount <= 0 || title.trim().isEmpty) {
       throw ArgumentError('Nominal dan deskripsi wajib valid.');
@@ -162,6 +163,7 @@ class AppDatabase extends _$AppDatabase {
             accountId: Value(accountId),
             amount: Value(amount),
             title: Value(title.trim()),
+            category: Value(category),
           ),
         );
       await into(ledgerEntries).insert(LedgerEntriesCompanion.insert(
