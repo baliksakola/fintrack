@@ -272,7 +272,11 @@ Future<void> _showTransferDialog(BuildContext context, AppDatabase db) async {
             await db.createTransfer(fromAccountId: fromId, toAccountId: toId, amount: value, title: title.text);
             if (dialogContext.mounted) Navigator.pop(dialogContext);
           } catch (e) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+            if (dialogContext.mounted) {
+              ScaffoldMessenger.of(dialogContext).showSnackBar(
+                SnackBar(content: Text(e.toString())),
+              );
+            }
           }
         }, child: const Text('Transfer')),
       ],
