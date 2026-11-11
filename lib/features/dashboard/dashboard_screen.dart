@@ -962,8 +962,7 @@ class _DebtSectionState extends State<DebtSection> {
                       '${debt.partyName} • ${debt.direction == 'payable' ? 'Utang' : 'Piutang'}'
                       '${debt.dueDate == null ? '' : ' • Jatuh tempo ${DateFormat('dd MMM yyyy', 'id_ID').format(debt.dueDate!)}'}'
                       '${overdue ? ' • TERLAMBAT' : ''}'
-                      '
-Total ${_rupiah.format(debt.amount)} • Sisa ${_rupiah.format(remaining)}',
+                      '\nTotal ${_rupiah.format(debt.amount)} • Sisa ${_rupiah.format(remaining)}',
                     ),
                     isThreeLine: true,
                     trailing: paid
