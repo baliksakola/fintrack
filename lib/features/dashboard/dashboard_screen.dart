@@ -105,12 +105,14 @@ class DashboardScreen extends ConsumerWidget {
                 stream: db.watchTransactions(),
                 builder: (context, snapshot) {
                   final items = snapshot.data ?? [];
-                  if (items.isEmpty) return const Card(
-                    child: Padding(
-                      padding: EdgeInsets.all(20),
-                      child: Text('Belum ada transaksi yang dicatat.'),
-                    ),
-                  );
+                  if (items.isEmpty) {
+                    return const Card(
+                      child: Padding(
+                        padding: EdgeInsets.all(20),
+                        child: Text('Belum ada transaksi yang dicatat.'),
+                      ),
+                    );
+                  }
                   return Column(
                     children: items.take(20).map((tx) {
                       final income = tx.type == 'income';
