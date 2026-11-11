@@ -769,7 +769,7 @@ class _BillsSectionState extends State<BillsSection> {
                       ? 'Terlambat ${days.abs()} hari'
                       : days == 0
                           ? 'Jatuh tempo hari ini'
-                          : 'Jatuh tempo ${days} hari lagi';
+                          : 'Jatuh tempo $days hari lagi';
                   return Card(
                     child: ListTile(
                       leading: CircleAvatar(
