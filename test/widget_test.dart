@@ -18,7 +18,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('FinTrack'), findsOneWidget);
+    expect(find.text('Ringkasan'), findsOneWidget);
+    expect(find.text('Home'), findsOneWidget);
+    expect(find.text('Aktivitas'), findsOneWidget);
+    expect(find.text('Rencana'), findsOneWidget);
+    expect(find.text('Laporan'), findsOneWidget);
+    expect(find.text('Lainnya'), findsOneWidget);
     expect(find.text('Total saldo'), findsOneWidget);
     expect(find.text('Belum ada rekening. Tambahkan rekening pertama.'), findsOneWidget);
 
