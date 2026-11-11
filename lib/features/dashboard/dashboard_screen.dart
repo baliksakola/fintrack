@@ -1711,7 +1711,7 @@ class _FinanceReportsSectionState extends State<FinanceReportsSection> {
         pw.Text('Rincian transaksi',
           style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
         pw.SizedBox(height: 8),
-        pw.Table.fromTextArray(data: detail),
+        pw.TableHelper.fromTextArray(data: detail),
       ]));
       final bytes = await doc.save();
       final stamp = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
