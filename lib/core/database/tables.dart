@@ -75,3 +75,30 @@ class Bills extends Table {
   @override
   Set<Column<Object>> get primaryKey => {id};
 }
+
+
+class Debts extends Table {
+  TextColumn get id => text()();
+  TextColumn get direction => text()(); // payable / receivable
+  TextColumn get partyName => text().withLength(min: 1, max: 100)();
+  TextColumn get title => text().withLength(min: 1, max: 120)();
+  IntColumn get amount => integer()();
+  DateTimeColumn get dueDate => dateTime().nullable()();
+  TextColumn get notes => text().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+class DebtPayments extends Table {
+  TextColumn get id => text()();
+  TextColumn get debtId => text().references(Debts, #id)();
+  TextColumn get transactionId =>
+      text().references(FinanceTransactions, #id)();
+  IntColumn get amount => integer()();
+  DateTimeColumn get paidAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
