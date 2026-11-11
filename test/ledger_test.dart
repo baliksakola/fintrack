@@ -58,6 +58,7 @@ void main() {
       accountId: accounts.first.id,
       amount: 50000,
       title: 'Honor',
+      category: 'Gaji',
     );
     final tx = (await db.watchTransactions().first).single;
 
@@ -66,6 +67,7 @@ void main() {
       accountId: accounts.last.id,
       amount: 75000,
       title: 'Honor revisi',
+      category: 'Bonus',
     );
 
     expect(await db.balanceFor(accounts.first.id), 100000);
@@ -73,6 +75,7 @@ void main() {
     final updated = (await db.watchTransactions().first).single;
     expect(updated.title, 'Honor revisi');
     expect(updated.accountId, accounts.last.id);
+    expect(updated.category, 'Bonus');
   });
 
   test('deleting expense restores account balance', () async {
