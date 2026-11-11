@@ -43,3 +43,20 @@ class Transfers extends Table {
   @override
   Set<Column<Object>> get primaryKey => {id};
 }
+
+
+class Budgets extends Table {
+  TextColumn get id => text()();
+  TextColumn get category => text()();
+  IntColumn get monthlyLimit => integer()();
+  DateTimeColumn get month => dateTime()();
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+
+  @override
+  List<Set<Column>> get uniqueKeys => [
+    {category, month},
+  ];
+}
