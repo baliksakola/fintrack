@@ -246,6 +246,87 @@ void main() {
     expect(await db.watchTotalBalance().first, 100000);
   });
 
+
+  test('debt partial payments reduce remaining balance and update cash ledger', () async {
+    await db.addAccount('Bank', 'Bank', 500000);
+    final account = (await db.watchAccounts().first).single;
+    await db.addDebt(
+      direction: 'payable',
+      partyName: 'Budi',
+      title: 'Pinjaman',
+      amount: 300000,
+    );
+    final debt = (await db.watchDebts().first).single;
+
+    await db.addDebtPayment(debtId: debt.id, accountId: account.id, amount: 100000);
+    expect(await db.debtRemaining(debt.id), 200000);
+    expect(await db.balanceFor(account.id), 400000);
+
+    await db.addDebtPayment(debtId: debt.id, accountId: account.id, amount: 200000);
+    expect(await db.debtRemaining(debt.id), 0);
+    expect(await db.balanceFor(account.id), 200000);
+  });
+
+  test('receivable payments increase account balance as income', () async {
+    await db.addAccount('Bank', 'Bank', 100000);
+    final account = (await db.watchAccounts().first).single;
+    await db.addDebt(
+      direction: 'receivable',
+      partyName: 'Siti',
+      title: 'Pinjaman teman',
+      amount: 250000,
+    );
+    final debt = (await db.watchDebts().first).single;
+
+    await db.addDebtPayment(debtId: debt.id, accountId: account.id, amount: 75000);
+
+    expect(await db.debtRemaining(debt.id), 175000);
+    expect(await db.balanceFor(account.id), 175000);
+    final tx = (await db.watchTransactions().first).single;
+    expect(tx.type, 'income');
+    expect(tx.category, 'Piutang');
+  });
+
+  test('debt payment cannot exceed remaining amount', () async {
+    await db.addAccount('Bank', 'Bank', 100000);
+    final account = (await db.watchAccounts().first).single;
+    await db.addDebt(
+      direction: 'payable',
+      partyName: 'Budi',
+      title: 'Pinjaman',
+      amount: 50000,
+    );
+    final debt = (await db.watchDebts().first).single;
+
+    await expectLater(
+      db.addDebtPayment(debtId: debt.id, accountId: account.id, amount: 60000),
+      throwsArgumentError,
+    );
+    expect(await db.debtRemaining(debt.id), 50000);
+    expect(await db.balanceFor(account.id), 100000);
+  });
+
+  test('backup restores debts and their payment history', () async {
+    await db.addAccount('Bank', 'Bank', 500000);
+    final account = (await db.watchAccounts().first).single;
+    await db.addDebt(
+      direction: 'payable',
+      partyName: 'Budi',
+      title: 'Pinjaman',
+      amount: 300000,
+    );
+    final debt = (await db.watchDebts().first).single;
+    await db.addDebtPayment(debtId: debt.id, accountId: account.id, amount: 50000);
+
+    final backup = await db.exportBackupJson();
+    await db.restoreBackupJson(backup);
+
+    final restored = (await db.watchDebts().first).single;
+    expect(restored.partyName, 'Budi');
+    expect(await db.debtRemaining(restored.id), 250000);
+    expect(await db.balanceFor(account.id), 450000);
+  });
+
   test('invalid amount is rejected', () async {
     await db.addAccount('Tunai', 'Tunai', 0);
     final account = (await db.watchAccounts().first).single;
