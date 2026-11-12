@@ -998,7 +998,9 @@ class RecurringTransactionsSection extends StatelessWidget {
             try {
               await database.addRecurringTransaction(type: type, accountId: accountId,
                 amount: value, title: title.text, category: category, firstDueDate: firstDate);
-              if (dialogContext.mounted) {\n                Navigator.pop(dialogContext);\n              }
+              if (dialogContext.mounted) {
+                Navigator.pop(dialogContext);
+              }
             } catch (e) {
               if (dialogContext.mounted) ScaffoldMessenger.of(dialogContext)
                 .showSnackBar(SnackBar(content: Text(e.toString())));
