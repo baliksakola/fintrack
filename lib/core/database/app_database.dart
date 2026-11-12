@@ -148,6 +148,34 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
+  Future<void> updateDebt({
+    required String debtId,
+    required String partyName,
+    required String title,
+    required int amount,
+    DateTime? dueDate,
+    String? notes,
+  }) async {
+    if (partyName.trim().isEmpty || title.trim().isEmpty || amount <= 0) {
+      throw ArgumentError('Data utang/piutang tidak valid.');
+    }
+    final current = await (select(debts)..where((d) => d.id.equals(debtId))).getSingleOrNull();
+    if (current == null) throw StateError('Data utang/piutang tidak ditemukan.');
+    final paid = current.amount - await debtRemaining(debtId);
+    if (amount < paid) {
+      throw ArgumentError('Nominal baru tidak boleh lebih kecil dari total pembayaran yang sudah dilakukan.');
+    }
+    await (update(debts)..where((d) => d.id.equals(debtId))).write(
+      DebtsCompanion(
+        partyName: Value(partyName.trim()),
+        title: Value(title.trim()),
+        amount: Value(amount),
+        dueDate: Value(dueDate == null ? null : DateTime(dueDate.year, dueDate.month, dueDate.day)),
+        notes: Value(notes?.trim().isEmpty == true ? null : notes?.trim()),
+      ),
+    );
+  }
+
   Future<void> deleteDebt(String debtId) async {
     final payments = await (select(debtPayments)
       ..where((p) => p.debtId.equals(debtId))).get();
@@ -251,6 +279,29 @@ class AppDatabase extends _$AppDatabase {
         ));
       }
     });
+  }
+
+  Future<void> updateBill({
+    required String billId,
+    required String title,
+    required String category,
+    required int amount,
+    required DateTime dueDate,
+  }) async {
+    if (title.trim().isEmpty || category.trim().isEmpty || amount <= 0) {
+      throw ArgumentError('Data tagihan tidak valid.');
+    }
+    final current = await (select(bills)..where((b) => b.id.equals(billId))).getSingleOrNull();
+    if (current == null) throw StateError('Tagihan tidak ditemukan.');
+    if (current.isPaid) throw StateError('Tagihan lunas tidak dapat diubah.');
+    await (update(bills)..where((b) => b.id.equals(billId))).write(
+      BillsCompanion(
+        title: Value(title.trim()),
+        category: Value(category.trim()),
+        amount: Value(amount),
+        dueDate: Value(DateTime(dueDate.year, dueDate.month, dueDate.day)),
+      ),
+    );
   }
 
   Future<void> deleteBill(String billId) =>
