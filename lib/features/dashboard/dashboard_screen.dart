@@ -1002,8 +1002,10 @@ class RecurringTransactionsSection extends StatelessWidget {
                 Navigator.pop(dialogContext);
               }
             } catch (e) {
-              if (dialogContext.mounted) ScaffoldMessenger.of(dialogContext)
-                .showSnackBar(SnackBar(content: Text(e.toString())));
+              if (dialogContext.mounted) {
+                ScaffoldMessenger.of(dialogContext)
+                    .showSnackBar(SnackBar(content: Text(e.toString())));
+              }
             }
           }, child: const Text('Simpan jadwal')),
         ],
@@ -1018,8 +1020,10 @@ class RecurringTransactionsSection extends StatelessWidget {
         content: Text(count == 0 ? 'Tidak ada jadwal yang jatuh tempo.' : '$count transaksi berhasil dibuat.'),
       ));
     } catch (e) {
-      if (context.mounted) ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(e.toString())));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.toString())));
+      }
     }
   }
 
