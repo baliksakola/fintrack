@@ -2210,7 +2210,7 @@ class _BillsSectionState extends State<BillsSection> {
                       child: Text('Tidak ada tagihan yang menunggu pembayaran.'),
                     ),
                   ),
-                ...() {
+                ...(() {
                   final grouped = <String, List<Bill>>{};
                   for (final bill in unpaid) {
                     grouped.putIfAbsent(bill.category, () => []).add(bill);
@@ -2249,7 +2249,7 @@ class _BillsSectionState extends State<BillsSection> {
                       }).toList(),
                     ),
                   )).toList();
-                }(),
+                })(),
                 if (paid.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Align(
