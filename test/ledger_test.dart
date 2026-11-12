@@ -13,6 +13,37 @@ void main() {
     await db.closeDatabase();
   });
 
+  test('financial savings goals can be created, updated and backed up', () async {
+    await db.saveFinancialGoal(
+      title: 'Dana Darurat',
+      targetAmount: 10000000,
+      savedAmount: 2500000,
+      targetDate: DateTime(2027, 6, 1),
+    );
+    var goals = await db.watchFinancialGoals().first;
+    expect(goals, hasLength(1));
+    expect(goals.single.savedAmount, 2500000);
+
+    await db.saveFinancialGoal(
+      goalId: goals.single.id,
+      title: 'Dana Darurat',
+      targetAmount: 12000000,
+      savedAmount: 3000000,
+      targetDate: DateTime(2027, 8, 1),
+    );
+    goals = await db.watchFinancialGoals().first;
+    expect(goals.single.targetAmount, 12000000);
+    expect(goals.single.savedAmount, 3000000);
+
+    final backup = await db.exportBackupJson();
+    await db.deleteFinancialGoal(goals.single.id);
+    await db.restoreBackupJson(backup);
+    goals = await db.watchFinancialGoals().first;
+    expect(goals, hasLength(1));
+    expect(goals.single.title, 'Dana Darurat');
+    expect(goals.single.targetAmount, 12000000);
+  });
+
   test('income and expense update account balance', () async {
     await db.addAccount('BNI', 'Bank', 100000);
     final account = await db.watchAccounts().first;
