@@ -1,3 +1,7 @@
+import 'dart:convert';
+import 'dart:math';
+
+import 'package:cryptography/cryptography.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
 
@@ -12,15 +16,40 @@ class AppLockService {
   static const _lockUntilKey = 'fintrack_pin_lock_until';
   static const _maxPinAttempts = 5;
   static const _lockDuration = Duration(seconds: 30);
+  static const _pinHashPrefix = 'v1';
+  static final _sha256 = Sha256();
   final LocalAuthentication _auth = LocalAuthentication();
 
   Future<bool> hasPin() async => (await _storage.read(key: _pinKey)) != null;
 
+  Future<String> _hashPin(String pin, String salt) async {
+    final digest = await _sha256.hash(utf8.encode('$salt:$pin'));
+    return base64UrlEncode(digest.bytes);
+  }
+
+  Future<String> _createPinRecord(String pin) async {
+    final random = Random.secure();
+    final salt = base64UrlEncode(
+      List<int>.generate(16, (_) => random.nextInt(256)),
+    );
+    final hash = await _hashPin(pin, salt);
+    return '$_pinHashPrefix:$salt:$hash';
+  }
+
+  bool _constantTimeEquals(String left, String right) {
+    if (left.length != right.length) return false;
+    var difference = 0;
+    for (var i = 0; i < left.length; i++) {
+      difference |= left.codeUnitAt(i) ^ right.codeUnitAt(i);
+    }
+    return difference == 0;
+  }
+
   Future<void> setPin(String pin) async {
-    if (!RegExp(r'^\d{6}$').hasMatch(pin)) {
+    if (!RegExp(r'^\\d{6}$').hasMatch(pin)) {
       throw ArgumentError('PIN harus terdiri dari 6 angka.');
     }
-    await _storage.write(key: _pinKey, value: pin);
+    await _storage.write(key: _pinKey, value: await _createPinRecord(pin));
   }
 
   Future<bool> verifyPin(String pin) async {
@@ -35,7 +64,20 @@ class AppLockService {
     }
 
     final savedPin = await _storage.read(key: _pinKey);
-    if (savedPin == pin) {
+    var isValid = false;
+    if (savedPin != null && savedPin.startsWith('$_pinHashPrefix:')) {
+      final parts = savedPin.split(':');
+      if (parts.length == 3 && parts[1].isNotEmpty && parts[2].isNotEmpty) {
+        final candidateHash = await _hashPin(pin, parts[1]);
+        isValid = _constantTimeEquals(candidateHash, parts[2]);
+      }
+    } else if (savedPin != null && savedPin == pin) {
+      // Migrate existing installations from a plaintext PIN to a salted hash.
+      await _storage.write(key: _pinKey, value: await _createPinRecord(pin));
+      isValid = true;
+    }
+
+    if (isValid) {
       await _storage.delete(key: _failedAttemptsKey);
       await _storage.delete(key: _lockUntilKey);
       return true;
