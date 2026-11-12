@@ -489,44 +489,58 @@ class AppDatabase extends _$AppDatabase {
       ..where((r) => r.isActive.equals(true) & r.nextDueDate.isSmallerOrEqualValue(today))
       ..orderBy([(r) => OrderingTerm.asc(r.nextDueDate)])).get();
     var created = 0;
+
     for (final schedule in schedules) {
-      final account = await (select(accounts)..where((a) =>
-        a.id.equals(schedule.accountId) & a.archived.equals(false))).getSingleOrNull();
-      if (account == null) {
-        throw StateError('Rekening untuk jadwal "${schedule.title}" tidak tersedia atau diarsipkan.');
-      }
       await transaction(() async {
-        var due = schedule.nextDueDate;
+        // Re-read inside the write transaction so concurrent runs cannot
+        // process the same due dates from a stale schedule snapshot.
+        final current = await (select(recurringTransactions)
+          ..where((r) => r.id.equals(schedule.id))).getSingleOrNull();
+        if (current == null ||
+            !current.isActive ||
+            current.nextDueDate.isAfter(today)) {
+          return;
+        }
+
+        final account = await (select(accounts)..where((a) =>
+          a.id.equals(current.accountId) & a.archived.equals(false))).getSingleOrNull();
+        if (account == null) {
+          throw StateError('Rekening untuk jadwal "${current.title}" tidak tersedia atau diarsipkan.');
+        }
+
+        var due = current.nextDueDate;
         while (!due.isAfter(today) &&
-            (schedule.endDate == null || !due.isAfter(schedule.endDate!))) {
+            (current.endDate == null || !due.isAfter(current.endDate!))) {
           final transactionId = _uuid.v4();
-          final delta = schedule.type == 'income' ? schedule.amount : -schedule.amount;
+          final delta = current.type == 'income' ? current.amount : -current.amount;
+          final now = DateTime.now();
           await into(financeTransactions).insert(FinanceTransactionsCompanion.insert(
             id: transactionId,
-            type: schedule.type,
-            accountId: schedule.accountId,
-            amount: schedule.amount,
-            title: schedule.title,
-            category: Value(schedule.category),
+            type: current.type,
+            accountId: current.accountId,
+            amount: current.amount,
+            title: current.title,
+            category: Value(current.category),
             occurredAt: due,
-            createdAt: DateTime.now(),
+            createdAt: now,
           ));
           await into(ledgerEntries).insert(LedgerEntriesCompanion.insert(
             id: _uuid.v4(),
             transactionId: transactionId,
-            accountId: schedule.accountId,
+            accountId: current.accountId,
             amountDelta: delta,
-            createdAt: DateTime.now(),
+            createdAt: now,
           ));
           created++;
           final nextMonth = DateTime(due.year, due.month + 1, 1);
           final lastDay = DateTime(nextMonth.year, nextMonth.month + 1, 0).day;
           due = DateTime(nextMonth.year, nextMonth.month,
-              schedule.dayOfMonth > lastDay ? lastDay : schedule.dayOfMonth);
+              current.dayOfMonth > lastDay ? lastDay : current.dayOfMonth);
         }
-        final finished = schedule.endDate != null && due.isAfter(schedule.endDate!);
+
+        final finished = current.endDate != null && due.isAfter(current.endDate!);
         await (update(recurringTransactions)
-          ..where((r) => r.id.equals(schedule.id))).write(
+          ..where((r) => r.id.equals(current.id))).write(
             RecurringTransactionsCompanion(
               nextDueDate: Value(due),
               isActive: Value(!finished),
