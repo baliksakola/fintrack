@@ -184,6 +184,8 @@ class _OverviewPage extends StatelessWidget {
       ),
       const SizedBox(height: 16),
       _WeeklyCashFlowCard(database: database),
+      const SizedBox(height: 12),
+      _DetailedMonthlyOverview(database: database),
       const SizedBox(height: 20),
       Row(
         children: [
@@ -206,6 +208,186 @@ class _OverviewPage extends StatelessWidget {
   );
 }
 
+
+class _DetailedMonthlyOverview extends StatelessWidget {
+  const _DetailedMonthlyOverview({required this.database});
+  final AppDatabase database;
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month);
+    final end = DateTime(now.year, now.month + 1);
+    final today = DateTime(now.year, now.month, now.day);
+    return StreamBuilder<List<FinanceTransaction>>(
+      stream: database.watchTransactions(),
+      builder: (context, txSnapshot) {
+        final transactions = (txSnapshot.data ?? []).where((tx) =>
+          tx.type != 'transfer' && !tx.occurredAt.isBefore(start) && tx.occurredAt.isBefore(end)
+        ).toList();
+        var income = 0;
+        var expense = 0;
+        final byCategory = <String, int>{};
+        for (final tx in transactions) {
+          if (tx.type == 'income') {
+            income += tx.amount;
+          } else if (tx.type == 'expense') {
+            expense += tx.amount;
+            final category = tx.category?.trim().isNotEmpty == true ? tx.category! : 'Tanpa kategori';
+            byCategory[category] = (byCategory[category] ?? 0) + tx.amount;
+          }
+        }
+        final sortedCategories = byCategory.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Ringkasan keuangan bulanan', style: Theme.of(context).textTheme.titleLarge),
+          Text(DateFormat('MMMM yyyy', 'id_ID').format(now), style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(child: _OverviewMetric(title: 'Pemasukan', value: income, color: Colors.green)),
+            const SizedBox(width: 8),
+            Expanded(child: _OverviewMetric(title: 'Pengeluaran', value: expense, color: Colors.red)),
+          ]),
+          const SizedBox(height: 8),
+          Card(child: ListTile(
+            title: const Text('Arus kas bersih bulan ini'),
+            subtitle: const Text('Pemasukan dikurangi pengeluaran'),
+            trailing: Text(_rupiah.format(income - expense), style: TextStyle(fontWeight: FontWeight.bold, color: income >= expense ? Colors.green : Colors.red)),
+          )),
+          const SizedBox(height: 8),
+          StreamBuilder<List<Bill>>(
+            stream: database.watchBills(),
+            builder: (context, billSnapshot) {
+              final bills = billSnapshot.data ?? <Bill>[];
+              final unpaid = bills.where((b) => !b.isPaid).toList();
+              final dueThisMonth = unpaid.where((b) => !b.dueDate.isBefore(start) && b.dueDate.isBefore(end)).toList();
+              final overdue = unpaid.where((b) => DateTime(b.dueDate.year, b.dueDate.month, b.dueDate.day).isBefore(today)).toList();
+              final totalUnpaid = unpaid.fold<int>(0, (sum, b) => sum + b.amount);
+              final totalMonth = dueThisMonth.fold<int>(0, (sum, b) => sum + b.amount);
+              return Card(child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Tagihan yang harus dibayar', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  _OverviewLine(label: 'Total tagihan belum lunas', value: _rupiah.format(totalUnpaid), strong: true),
+                  _OverviewLine(label: 'Tagihan jatuh tempo bulan ini', value: _rupiah.format(totalMonth)),
+                  _OverviewLine(label: 'Jumlah tagihan belum lunas', value: unpaid.length.toString() + ' tagihan'),
+                  _OverviewLine(label: 'Sudah melewati jatuh tempo', value: overdue.length.toString() + ' tagihan', color: overdue.isEmpty ? null : Colors.red),
+                ]),
+              ));
+            },
+          ),
+          const SizedBox(height: 8),
+          StreamBuilder<List<Debt>>(
+            stream: database.watchDebts(),
+            builder: (context, debtSnapshot) {
+              final debts = debtSnapshot.data ?? <Debt>[];
+              return FutureBuilder<List<int>>(
+                future: Future.wait(debts.map((d) => database.debtRemaining(d.id))),
+                builder: (context, remainingSnapshot) {
+                  final remaining = remainingSnapshot.data ?? debts.map((d) => d.amount).toList();
+                  var payable = 0; var receivable = 0; var payableCount = 0; var receivableCount = 0;
+                  for (var i = 0; i < debts.length; i++) {
+                    if (debts[i].direction == 'payable') {
+                      payable += remaining[i]; if (remaining[i] > 0) payableCount++;
+                    } else {
+                      receivable += remaining[i]; if (remaining[i] > 0) receivableCount++;
+                    }
+                  }
+                  return Card(child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('Utang & piutang tersisa', style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 8),
+                      _OverviewLine(label: 'Utang yang masih harus dibayar ($payableCount)', value: _rupiah.format(payable), color: Colors.red),
+                      _OverviewLine(label: 'Piutang yang belum diterima ($receivableCount)', value: _rupiah.format(receivable), color: Colors.green),
+                    ]),
+                  ));
+                },
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+          StreamBuilder<List<Budget>>(
+            stream: database.watchBudgetsForMonth(now),
+            builder: (context, budgetSnapshot) {
+              final budgets = budgetSnapshot.data ?? <Budget>[];
+              final totalLimit = budgets.fold<int>(0, (sum, b) => sum + b.monthlyLimit);
+              final spentForBudget = budgets.fold<int>(0, (sum, b) => sum + (byCategory[b.category] ?? 0));
+              return Card(child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Anggaran bulan ini', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  _OverviewLine(label: 'Total batas anggaran', value: _rupiah.format(totalLimit)),
+                  _OverviewLine(label: 'Pengeluaran kategori beranggaran', value: _rupiah.format(spentForBudget)),
+                  _OverviewLine(label: 'Sisa anggaran', value: _rupiah.format(totalLimit - spentForBudget), color: spentForBudget > totalLimit ? Colors.red : Colors.green),
+                  if (budgets.isEmpty) const Text('Belum ada anggaran yang dibuat.', style: TextStyle(fontSize: 12)),
+                ]),
+              ));
+            },
+          ),
+          const SizedBox(height: 8),
+          Card(child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Pengeluaran per kategori', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              if (sortedCategories.isEmpty) const Text('Belum ada pengeluaran bulan ini.')
+              else ...sortedCategories.map((entry) => _OverviewCategoryLine(label: entry.key, amount: entry.value, total: expense)),
+            ]),
+          )),
+        ]);
+      },
+    );
+  }
+}
+
+class _OverviewMetric extends StatelessWidget {
+  const _OverviewMetric({required this.title, required this.value, required this.color});
+  final String title; final int value; final Color color;
+  @override
+  Widget build(BuildContext context) => Card(child: Padding(
+    padding: const EdgeInsets.all(14),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(title, style: Theme.of(context).textTheme.bodySmall),
+      const SizedBox(height: 5),
+      Text(_rupiah.format(value), maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.bold, color: color)),
+    ]),
+  ));
+}
+
+class _OverviewLine extends StatelessWidget {
+  const _OverviewLine({required this.label, required this.value, this.color, this.strong = false});
+  final String label; final String value; final Color? color; final bool strong;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(children: [
+      Expanded(child: Text(label, style: TextStyle(fontWeight: strong ? FontWeight.bold : null))),
+      const SizedBox(width: 8),
+      Text(value, textAlign: TextAlign.end, style: TextStyle(fontWeight: strong ? FontWeight.bold : null, color: color)),
+    ]),
+  );
+}
+
+class _OverviewCategoryLine extends StatelessWidget {
+  const _OverviewCategoryLine({required this.label, required this.amount, required this.total});
+  final String label; final int amount; final int total;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 10),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Expanded(child: Text(label)),
+        Text(_rupiah.format(amount), style: const TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(width: 8),
+        Text(total == 0 ? '0%' : (amount * 100 / total).round().toString() + '%', style: Theme.of(context).textTheme.bodySmall),
+      ]),
+      const SizedBox(height: 4),
+      LinearProgressIndicator(value: total == 0 ? 0 : (amount / total).clamp(0.0, 1.0)),
+    ]),
+  );
+}
 
 class _WeeklyCashFlowCard extends StatelessWidget {
   const _WeeklyCashFlowCard({required this.database});
