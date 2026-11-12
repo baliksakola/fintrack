@@ -246,17 +246,19 @@ class AppDatabase extends _$AppDatabase {
     required String billId,
     required String accountId,
   }) async {
-    final bill = await (select(bills)..where((b) => b.id.equals(billId)))
-        .getSingleOrNull();
-    if (bill == null) throw StateError('Tagihan tidak ditemukan.');
-    if (bill.isPaid) throw StateError('Tagihan sudah ditandai lunas.');
-    final account = await (select(accounts)..where((a) =>
-      a.id.equals(accountId) & a.archived.equals(false))).getSingleOrNull();
-    if (account == null) throw StateError('Rekening tidak ditemukan.');
-
-    final now = DateTime.now();
-    final transactionId = _uuid.v4();
     await transaction(() async {
+      // Re-read bill and account inside the write transaction so concurrent
+      // taps cannot create more than one payment for the same bill.
+      final bill = await (select(bills)..where((b) => b.id.equals(billId)))
+          .getSingleOrNull();
+      if (bill == null) throw StateError('Tagihan tidak ditemukan.');
+      if (bill.isPaid) throw StateError('Tagihan sudah ditandai lunas.');
+      final account = await (select(accounts)..where((a) =>
+        a.id.equals(accountId) & a.archived.equals(false))).getSingleOrNull();
+      if (account == null) throw StateError('Rekening tidak ditemukan.');
+
+      final now = DateTime.now();
+      final transactionId = _uuid.v4();
       await into(financeTransactions).insert(FinanceTransactionsCompanion.insert(
         id: transactionId,
         type: 'expense',
