@@ -721,14 +721,72 @@ class _CashFlowLegend extends StatelessWidget {
   );
 }
 
+class _PageIntro extends StatelessWidget {
+  const _PageIntro({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: colors.primaryContainer,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: colors.onPrimaryContainer),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  )),
+                  const SizedBox(height: 4),
+                  Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ActivityPage extends StatelessWidget {
   const _ActivityPage({required this.database});
   final AppDatabase database;
 
   @override
   Widget build(BuildContext context) => ListView(
-    padding: const EdgeInsets.all(16),
-    children: [TransactionHistorySection(database: database)],
+    padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+    children: [
+      const _PageIntro(
+        icon: Icons.receipt_long_outlined,
+        title: 'Aktivitas keuangan',
+        subtitle: 'Telusuri pemasukan, pengeluaran, dan transfer dalam satu daftar.',
+      ),
+      const SizedBox(height: 12),
+      TransactionHistorySection(database: database),
+    ],
   );
 }
 
@@ -1058,16 +1116,22 @@ class _PlanningPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListView(
-    padding: const EdgeInsets.all(16),
+    padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
     children: [
+      const _PageIntro(
+        icon: Icons.event_note_outlined,
+        title: 'Rencana keuangan',
+        subtitle: 'Atur tagihan, utang-piutang, anggaran, target, dan transaksi rutin.',
+      ),
+      const SizedBox(height: 16),
       BillsSection(database: database),
-      const SizedBox(height: 20),
+      const SizedBox(height: 16),
       DebtSection(database: database),
-      const SizedBox(height: 20),
+      const SizedBox(height: 16),
       BudgetSection(database: database),
-      const SizedBox(height: 20),
+      const SizedBox(height: 16),
       FinancialGoalsSection(database: database),
-      const SizedBox(height: 20),
+      const SizedBox(height: 16),
       RecurringTransactionsSection(database: database),
     ],
   );
@@ -1418,14 +1482,43 @@ class _MorePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListView(
-    padding: const EdgeInsets.all(16),
+    padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
     children: [
-      Text('Pengelolaan data', style: Theme.of(context).textTheme.titleMedium),
+      const _PageIntro(
+        icon: Icons.tune_outlined,
+        title: 'Lainnya',
+        subtitle: 'Kelola keamanan, laporan, dan salinan cadangan data FinTrack.',
+      ),
+      const SizedBox(height: 16),
+      Text('Keamanan', style: Theme.of(context).textTheme.titleSmall?.copyWith(
+        fontWeight: FontWeight.w700,
+      )),
       const SizedBox(height: 8),
       const AppSecuritySection(),
       const SizedBox(height: 16),
-      ListTile(leading: const Icon(Icons.analytics_outlined), title: const Text('Laporan keuangan'), subtitle: const Text('Lihat dan ekspor laporan PDF atau Excel.'), trailing: const Icon(Icons.chevron_right), onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => Scaffold(appBar: AppBar(title: const Text('Laporan keuangan')), body: _ReportsPage(database: database))))),
-      BackupSection(database: database),
+      Text('Data dan laporan', style: Theme.of(context).textTheme.titleSmall?.copyWith(
+        fontWeight: FontWeight.w700,
+      )),
+      const SizedBox(height: 8),
+      Card(
+        clipBehavior: Clip.antiAlias,
+        child: Column(children: [
+          ListTile(
+            leading: const Icon(Icons.analytics_outlined),
+            title: const Text('Laporan keuangan'),
+            subtitle: const Text('Lihat dan ekspor laporan PDF atau Excel.'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => Scaffold(
+                appBar: AppBar(title: const Text('Laporan keuangan')),
+                body: _ReportsPage(database: database),
+              ),
+            )),
+          ),
+          const Divider(height: 1, indent: 56),
+          BackupSection(database: database),
+        ]),
+      ),
     ],
   );
 }
