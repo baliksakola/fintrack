@@ -753,52 +753,110 @@ class _FinancialForecastCard extends StatefulWidget {
   @override
   State<_FinancialForecastCard> createState() => _FinancialForecastCardState();
 }
+
 class _FinancialForecastCardState extends State<_FinancialForecastCard> {
   int _days = 30;
+
   @override
   Widget build(BuildContext context) {
     final today = DateTime.now();
     final start = DateTime(today.year, today.month, today.day);
     final end = start.add(Duration(days: _days));
+
     return StreamBuilder<int>(
       stream: widget.database.watchTotalBalance(),
-      builder: (context, bs) => StreamBuilder<List<Bill>>(
+      builder: (context, balanceSnapshot) => StreamBuilder<List<Bill>>(
         stream: widget.database.watchBills(),
         builder: (context, billsSnapshot) => StreamBuilder<List<Debt>>(
           stream: widget.database.watchDebts(),
-          builder: (context, debtsSnapshot) {
-            final bills = (billsSnapshot.data ?? <Bill>[]).where((b) => !b.isPaid && !b.dueDate.isBefore(start) && b.dueDate.isBefore(end)).toList();
-            final debts = (debtsSnapshot.data ?? <Debt>[]).where((d) => d.dueDate != null && !d.dueDate!.isBefore(start) && d.dueDate!.isBefore(end)).toList();
-            final balance = bs.data ?? 0;
-            return FutureBuilder<List<int>>(
-              future: Future.wait(debts.map((d) => widget.database.debtRemaining(d.id))),
-              builder: (context, remainingSnapshot) {
-                final remaining = remainingSnapshot.data ?? debts.map((d) => d.amount).toList();
-                var payable = 0;
-                var receivable = 0;
-                for (var i = 0; i < debts.length; i++) {
-                  if (debts[i].direction == 'payable') payable += remaining[i];
-                  if (debts[i].direction == 'receivable') receivable += remaining[i];
+          builder: (context, debtsSnapshot) => StreamBuilder<List<RecurringTransaction>>(
+            stream: widget.database.watchRecurringTransactions(),
+            builder: (context, recurringSnapshot) {
+              final bills = (billsSnapshot.data ?? <Bill>[]).where((bill) =>
+                !bill.isPaid && !bill.dueDate.isBefore(start) && bill.dueDate.isBefore(end)
+              ).toList();
+              final debts = (debtsSnapshot.data ?? <Debt>[]).where((debt) =>
+                debt.dueDate != null && !debt.dueDate!.isBefore(start) && debt.dueDate!.isBefore(end)
+              ).toList();
+              final schedules = (recurringSnapshot.data ?? <RecurringTransaction>[])
+                  .where((schedule) => schedule.isActive).toList();
+
+              var recurringIncome = 0;
+              var recurringExpense = 0;
+              for (final schedule in schedules) {
+                var due = schedule.nextDueDate;
+                while (due.isBefore(end) &&
+                    (schedule.endDate == null || !due.isAfter(schedule.endDate!))) {
+                  if (!due.isBefore(start)) {
+                    if (schedule.type == 'income') {
+                      recurringIncome += schedule.amount;
+                    } else if (schedule.type == 'expense') {
+                      recurringExpense += schedule.amount;
+                    }
+                  }
+                  final nextMonth = DateTime(due.year, due.month + 1, 1);
+                  final lastDay = DateTime(nextMonth.year, nextMonth.month + 1, 0).day;
+                  due = DateTime(nextMonth.year, nextMonth.month,
+                      schedule.dayOfMonth > lastDay ? lastDay : schedule.dayOfMonth);
                 }
-                final billTotal = bills.fold<int>(0, (s,b) => s+b.amount);
-                final out = billTotal + payable;
-                final projected = balance - out + receivable;
-                return Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children: [
-                    Expanded(child: Text('Prediksi kondisi keuangan', style: Theme.of(context).textTheme.titleMedium)),
-                    SegmentedButton<int>(segments: const [ButtonSegment(value: 30,label:Text('30 hari')),ButtonSegment(value:90,label:Text('90 hari'))], selected: {_days}, onSelectionChanged: (v)=>setState(()=>_days=v.first)),
-                  ]),
-                  const SizedBox(height: 8),
-                  _OverviewLine(label:'Saldo saat ini',value:_rupiah.format(balance)),
-                  _OverviewLine(label:'Tagihan & utang',value:'- ${_rupiah.format(out)}',color:Colors.red),
-                  _OverviewLine(label:'Piutang jatuh tempo',value:'+ ${_rupiah.format(receivable)}',color:Colors.green),
-                  const Divider(),
-                  _OverviewLine(label:'Perkiraan saldo akhir',value:_rupiah.format(projected),color:projected>=0?Colors.green:Colors.red,strong:true),
-                  Text('Perkiraan hanya menghitung saldo saat ini, tagihan, serta sisa utang/piutang yang jatuh tempo. Pemasukan lain dan pengeluaran harian belum diperhitungkan.',style:Theme.of(context).textTheme.bodySmall),
-                ])));
-              },
-            );
-          },
+              }
+
+              final balance = balanceSnapshot.data ?? 0;
+              return FutureBuilder<List<int>>(
+                future: Future.wait(debts.map((debt) =>
+                    widget.database.debtRemaining(debt.id))),
+                builder: (context, remainingSnapshot) {
+                  final remaining = remainingSnapshot.data ??
+                      debts.map((debt) => debt.amount).toList();
+                  var payable = 0;
+                  var receivable = 0;
+                  for (var i = 0; i < debts.length; i++) {
+                    if (debts[i].direction == 'payable') payable += remaining[i];
+                    if (debts[i].direction == 'receivable') receivable += remaining[i];
+                  }
+                  final billTotal = bills.fold<int>(0, (sum, bill) => sum + bill.amount);
+                  final out = billTotal + payable + recurringExpense;
+                  final projected = balance - out + receivable + recurringIncome;
+
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            Expanded(child: Text('Prediksi kondisi keuangan',
+                                style: Theme.of(context).textTheme.titleMedium)),
+                            SegmentedButton<int>(
+                              segments: const [
+                                ButtonSegment(value: 30, label: Text('30 hari')),
+                                ButtonSegment(value: 90, label: Text('90 hari')),
+                              ],
+                              selected: {_days},
+                              onSelectionChanged: (value) => setState(() => _days = value.first),
+                            ),
+                          ]),
+                          const SizedBox(height: 8),
+                          _OverviewLine(label: 'Saldo saat ini', value: _rupiah.format(balance)),
+                          _OverviewLine(label: 'Tagihan & utang', value: '- ${_rupiah.format(billTotal + payable)}', color: Colors.red),
+                          _OverviewLine(label: 'Pengeluaran berulang', value: '- ${_rupiah.format(recurringExpense)}', color: Colors.red),
+                          _OverviewLine(label: 'Piutang jatuh tempo', value: '+ ${_rupiah.format(receivable)}', color: Colors.green),
+                          _OverviewLine(label: 'Pemasukan berulang', value: '+ ${_rupiah.format(recurringIncome)}', color: Colors.green),
+                          const Divider(),
+                          _OverviewLine(label: 'Perkiraan saldo akhir', value: _rupiah.format(projected),
+                              color: projected >= 0 ? Colors.green : Colors.red, strong: true),
+                          Text(
+                            'Prediksi mencakup saldo saat ini, tagihan, utang/piutang jatuh tempo, dan jadwal transaksi berulang. Pemasukan serta pengeluaran tidak terjadwal belum diperhitungkan.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
         ),
       ),
     );
