@@ -2037,6 +2037,7 @@ Future<void> _showTransactionDialog(BuildContext context, AppDatabase db, String
   String accountId = accounts.first.id;
   final categories = type == 'income' ? _incomeCategories : _expenseCategories;
   String category = categories.first;
+  bool isSaving = false;
   await showDialog<void>(context: context, builder: (dialogContext) => StatefulBuilder(
     builder: (context, setState) => AlertDialog(
       title: Text(type == 'income' ? 'Catat pemasukan' : 'Catat pengeluaran'),
@@ -2070,7 +2071,7 @@ Future<void> _showTransactionDialog(BuildContext context, AppDatabase db, String
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Batal')),
-        FilledButton(onPressed: () async {
+        FilledButton(onPressed: isSaving ? null : () async {
           final value = int.tryParse(amount.text.replaceAll('.', '').replaceAll(',', '')) ?? 0;
           if (title.text.trim().isEmpty || value <= 0) {
             ScaffoldMessenger.of(dialogContext).showSnackBar(
@@ -2078,6 +2079,7 @@ Future<void> _showTransactionDialog(BuildContext context, AppDatabase db, String
             );
             return;
           }
+          setState(() => isSaving = true);
           try {
             if (type == 'income') {
               await db.addIncome(accountId: accountId, amount: value, title: title.text, category: category);
@@ -2087,12 +2089,13 @@ Future<void> _showTransactionDialog(BuildContext context, AppDatabase db, String
             if (dialogContext.mounted) Navigator.pop(dialogContext);
           } catch (e) {
             if (dialogContext.mounted) {
+              setState(() => isSaving = false);
               ScaffoldMessenger.of(dialogContext).showSnackBar(
                 SnackBar(content: Text(e.toString())),
               );
             }
           }
-        }, child: const Text('Simpan')),
+        }, child: Text(isSaving ? 'Menyimpan...' : 'Simpan')),
       ],
     ),
   ));
@@ -2111,6 +2114,7 @@ Future<void> _showTransferDialog(BuildContext context, AppDatabase db) async {
   final amount = TextEditingController();
   String fromId = accounts.first.id;
   String toId = accounts[1].id;
+  bool isSaving = false;
   await showDialog<void>(context: context, builder: (dialogContext) => StatefulBuilder(
     builder: (context, setState) => AlertDialog(
       title: const Text('Transfer antar rekening'),
@@ -2147,7 +2151,7 @@ Future<void> _showTransferDialog(BuildContext context, AppDatabase db) async {
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Batal')),
-        FilledButton(onPressed: () async {
+        FilledButton(onPressed: isSaving ? null : () async {
           final value = int.tryParse(amount.text.replaceAll('.', '').replaceAll(',', '')) ?? 0;
           if (title.text.trim().isEmpty || value <= 0 || fromId == toId) {
             ScaffoldMessenger.of(dialogContext).showSnackBar(
@@ -2155,17 +2159,19 @@ Future<void> _showTransferDialog(BuildContext context, AppDatabase db) async {
             );
             return;
           }
+          setState(() => isSaving = true);
           try {
             await db.createTransfer(fromAccountId: fromId, toAccountId: toId, amount: value, title: title.text.trim());
             if (dialogContext.mounted) Navigator.pop(dialogContext);
           } catch (e) {
             if (dialogContext.mounted) {
+              setState(() => isSaving = false);
               ScaffoldMessenger.of(dialogContext).showSnackBar(
                 SnackBar(content: Text(e.toString())),
               );
             }
           }
-        }, child: const Text('Transfer')),
+        }, child: Text(isSaving ? 'Memproses...' : 'Transfer')),
       ],
     ),
   ));
