@@ -749,7 +749,8 @@ class AppDatabase extends _$AppDatabase {
     final billRows = rows('bills');
     final debtRows = decoded['debts'] is List ? rows('debts') : <Map<String, dynamic>>[];
     final debtPaymentRows = decoded['debtPayments'] is List ? rows('debtPayments') : <Map<String, dynamic>>[];
-    final goalRows = decoded['financialGoals'] is List ? rows('financialGoals') : <Map<String, dynamic>>[];\n    final recurringRows = decoded['recurringTransactions'] is List ? rows('recurringTransactions') : <Map<String, dynamic>>[];
+    final goalRows = decoded['financialGoals'] is List ? rows('financialGoals') : <Map<String, dynamic>>[];
+    final recurringRows = decoded['recurringTransactions'] is List ? rows('recurringTransactions') : <Map<String, dynamic>>[];
 
     DateTime date(Map<String, dynamic> row, String key) {
       final value = row[key];
@@ -776,7 +777,8 @@ class AppDatabase extends _$AppDatabase {
     }
 
     await transaction(() async {
-      await delete(recurringTransactions).go();\n      await delete(debtPayments).go();
+      await delete(recurringTransactions).go();
+      await delete(debtPayments).go();
       await delete(ledgerEntries).go();
       await delete(transfers).go();
       await delete(financeTransactions).go();
@@ -851,7 +853,19 @@ class AppDatabase extends _$AppDatabase {
           targetDate: date(row, 'targetDate'), createdAt: date(row, 'createdAt'),
         ));
       }
-      for (final row in recurringRows) {\n        final category = row['category'];\n        final endDate = row['endDate'];\n        await into(recurringTransactions).insert(RecurringTransactionsCompanion.insert(\n          id: string(row, 'id'), type: string(row, 'type'),\n          accountId: string(row, 'accountId'), amount: integer(row, 'amount'),\n          title: string(row, 'title'), category: Value(category is String ? category : null),\n          nextDueDate: date(row, 'nextDueDate'), dayOfMonth: integer(row, 'dayOfMonth'),\n          endDate: Value(endDate is String ? DateTime.parse(endDate) : null),\n          isActive: Value(boolean(row, 'isActive')), createdAt: date(row, 'createdAt'),\n        ));\n      }\n      for (final row in debtPaymentRows) {
+      for (final row in recurringRows) {
+        final category = row['category'];
+        final endDate = row['endDate'];
+        await into(recurringTransactions).insert(RecurringTransactionsCompanion.insert(
+          id: string(row, 'id'), type: string(row, 'type'),
+          accountId: string(row, 'accountId'), amount: integer(row, 'amount'),
+          title: string(row, 'title'), category: Value(category is String ? category : null),
+          nextDueDate: date(row, 'nextDueDate'), dayOfMonth: integer(row, 'dayOfMonth'),
+          endDate: Value(endDate is String ? DateTime.parse(endDate) : null),
+          isActive: Value(boolean(row, 'isActive')), createdAt: date(row, 'createdAt'),
+        ));
+      }
+      for (final row in debtPaymentRows) {
         await into(debtPayments).insert(DebtPaymentsCompanion.insert(
           id: string(row, 'id'),
           debtId: string(row, 'debtId'),
