@@ -1984,36 +1984,39 @@ Future<void> _showEditTransactionDialog(
     builder: (dialogContext) => StatefulBuilder(
       builder: (context, setState) => AlertDialog(
         title: Text(transaction.type == 'income' ? 'Edit pemasukan' : 'Edit pengeluaran'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: title,
-              decoration: const InputDecoration(labelText: 'Keterangan'),
-            ),
-            TextField(
-              controller: amount,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Nominal (Rp)'),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: accountId,
-              items: accounts.map((a) => DropdownMenuItem(
-                value: a.id,
-                child: Text(a.name),
-              )).toList(),
-              onChanged: (value) => setState(() => accountId = value ?? accountId),
-              decoration: const InputDecoration(labelText: 'Rekening'),
-            ),
-            const SizedBox(height: 8),
-            DropdownButtonFormField<String>(
-              initialValue: category,
-              items: categories.map((value) => DropdownMenuItem(value: value, child: Text(value))).toList(),
-              onChanged: (value) => setState(() => category = value ?? category),
-              decoration: const InputDecoration(labelText: 'Kategori'),
-            ),
-          ],
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: title,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(labelText: 'Keterangan'),
+              ),
+              TextField(
+                controller: amount,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Nominal (Rp)'),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: accountId,
+                items: accounts.map((a) => DropdownMenuItem(
+                  value: a.id,
+                  child: Text(a.name),
+                )).toList(),
+                onChanged: (value) => setState(() => accountId = value ?? accountId),
+                decoration: const InputDecoration(labelText: 'Rekening'),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                initialValue: category,
+                items: categories.map((value) => DropdownMenuItem(value: value, child: Text(value))).toList(),
+                onChanged: (value) => setState(() => category = value ?? category),
+                decoration: const InputDecoration(labelText: 'Kategori'),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -2025,6 +2028,12 @@ Future<void> _showEditTransactionDialog(
               final value = int.tryParse(
                 amount.text.replaceAll('.', '').replaceAll(',', ''),
               ) ?? 0;
+              if (title.text.trim().isEmpty || value <= 0) {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  const SnackBar(content: Text('Isi keterangan dan masukkan nominal lebih dari Rp 0.')),
+                );
+                return;
+              }
               try {
                 await db.updateTransaction(
                   transactionId: transaction.id,
@@ -2048,6 +2057,8 @@ Future<void> _showEditTransactionDialog(
       ),
     ),
   );
+  title.dispose();
+  amount.dispose();
 }
 
 Future<void> _confirmDeleteTransaction(
