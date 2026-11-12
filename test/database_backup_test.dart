@@ -328,4 +328,22 @@ void main() {
     expect(accounts.single.name, 'Data lama');
     expect(await database.watchTotalBalance().first, 125000);
   });
+
+  test('malformed optional backup section is rejected without data loss', () async {
+    await database.addAccount('Rekening utama', 'cash', 75000);
+    final backup = jsonDecode(await database.exportBackupJson())
+        as Map<String, dynamic>;
+    backup['debts'] = 'data rusak';
+
+    await expectLater(
+      database.restoreBackupJson(jsonEncode(backup)),
+      throwsFormatException,
+    );
+
+    final accounts = await database.watchAccounts().first;
+    expect(accounts, hasLength(1));
+    expect(accounts.single.name, 'Rekening utama');
+    expect(await database.watchTotalBalance().first, 75000);
+  });
+
 }
