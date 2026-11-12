@@ -1082,12 +1082,33 @@ class _CalendarPageState extends State<_CalendarPage>{
   Widget build(BuildContext context){
     final start=DateTime(_month.year,_month.month);
     final end=DateTime(_month.year,_month.month+1);
-    return ListView(padding:const EdgeInsets.all(16),children:[
-      Row(children:[
-        IconButton(onPressed:()=>setState(()=>_month=DateTime(_month.year,_month.month-1)),icon:const Icon(Icons.chevron_left)),
-        Expanded(child:Text(DateFormat('MMMM yyyy','id_ID').format(_month),textAlign:TextAlign.center,style:Theme.of(context).textTheme.titleLarge)),
-        IconButton(onPressed:()=>setState(()=>_month=DateTime(_month.year,_month.month+1),),icon:const Icon(Icons.chevron_right)),
-      ]),
+    return ListView(padding:const EdgeInsets.fromLTRB(16,12,16,28),children:[
+      const _PageIntro(
+        icon: Icons.calendar_month_outlined,
+        title: 'Kalender keuangan',
+        subtitle: 'Pantau tagihan, utang, dan piutang berdasarkan tanggal jatuh tempo.',
+      ),
+      const SizedBox(height:12),
+      Card(
+        margin: EdgeInsets.zero,
+        child: Row(children:[
+          IconButton(
+            tooltip: 'Bulan sebelumnya',
+            onPressed:()=>setState(()=>_month=DateTime(_month.year,_month.month-1)),
+            icon:const Icon(Icons.chevron_left),
+          ),
+          Expanded(child:Text(
+            DateFormat('MMMM yyyy','id_ID').format(_month),
+            textAlign:TextAlign.center,
+            style:Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight:FontWeight.w700),
+          )),
+          IconButton(
+            tooltip: 'Bulan berikutnya',
+            onPressed:()=>setState(()=>_month=DateTime(_month.year,_month.month+1)),
+            icon:const Icon(Icons.chevron_right),
+          ),
+        ]),
+      ),
       StreamBuilder<List<Bill>>(stream:widget.database.watchBills(),builder:(context,bs)=>StreamBuilder<List<Debt>>(stream:widget.database.watchDebts(),builder:(context,ds){
         final events=<_CalendarEvent>[];
         for(final b in bs.data??<Bill>[]){if(!b.isPaid&&!b.dueDate.isBefore(start)&&b.dueDate.isBefore(end)){events.add(_CalendarEvent(date:b.dueDate,title:b.title,detail:b.category,amount:b.amount,income:false,type:'Tagihan'));}}
