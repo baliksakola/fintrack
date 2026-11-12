@@ -386,6 +386,15 @@ class AppDatabase extends _$AppDatabase {
     readsFrom: {accounts, ledgerEntries},
   ).watch().map((rows) => rows.first.read<int>('total'));
 
+  Stream<int> watchAccountBalance(String accountId) => customSelect(
+    'SELECT COALESCE(a.opening_balance, 0) + '
+    'COALESCE((SELECT SUM(le.amount_delta) FROM ledger_entries le '
+    'WHERE le.account_id = a.id), 0) AS balance '
+    'FROM accounts a WHERE a.id = ?',
+    variables: [Variable.withString(accountId)],
+    readsFrom: {accounts, ledgerEntries},
+  ).watch().map((rows) => rows.first.read<int>('balance'));
+
   Stream<List<FinanceTransaction>> watchTransactions() =>
       (select(financeTransactions)..orderBy([(t) => OrderingTerm.desc(t.occurredAt)])).watch();
 
