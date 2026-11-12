@@ -2210,49 +2210,46 @@ class _BillsSectionState extends State<BillsSection> {
                       child: Text('Tidak ada tagihan yang menunggu pembayaran.'),
                     ),
                   ),
-                ...unpaid.map((bill) {
-                  final due = DateTime(
-                    bill.dueDate.year, bill.dueDate.month, bill.dueDate.day,
-                  );
-                  final days = due.difference(todayDate).inDays;
-                  final overdue = days < 0;
-                  final nearDue = days >= 0 && days <= 3;
-                  final color = overdue ? Colors.red : nearDue ? Colors.orange : Colors.green;
-                  final status = overdue
-                      ? 'Terlambat ${days.abs()} hari'
-                      : days == 0
-                          ? 'Jatuh tempo hari ini'
-                          : 'Jatuh tempo $days hari lagi';
-                  return Card(
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: color.withValues(alpha: 0.12),
-                        child: Icon(
-                          overdue ? Icons.warning_amber_rounded : Icons.receipt_long,
-                          color: color,
-                        ),
-                      ),
-                      title: Text(bill.title),
-                      subtitle: Text(
-                        '${bill.category} • ${DateFormat('dd MMM yyyy', 'id_ID').format(bill.dueDate)}\n$status${bill.isMonthly ? ' • Bulanan' : ''}',
-                        style: TextStyle(color: color),
-                      ),
-                      isThreeLine: true,
-                      trailing: PopupMenuButton<String>(
-                        onSelected: (action) {
-                          if (action == 'edit') _editBill(bill);
-                          if (action == 'delete') _deleteBill(bill);
-                          if (action == 'pay') _payBill(bill);
-                        },
-                        itemBuilder: (context) => [
-                          const PopupMenuItem(value: 'edit', child: ListTile(dense: true, leading: Icon(Icons.edit_outlined), title: Text('Edit'))),
-                          const PopupMenuItem(value: 'delete', child: ListTile(dense: true, leading: Icon(Icons.delete_outline), title: Text('Hapus'))),
-                          const PopupMenuItem(value: 'pay', child: ListTile(dense: true, leading: Icon(Icons.payments_outlined), title: Text('Bayar'))),
-                        ],
-                      ),
+                ...() {
+                  final grouped = <String, List<Bill>>{};
+                  for (final bill in unpaid) {
+                    grouped.putIfAbsent(bill.category, () => []).add(bill);
+                  }
+                  return grouped.entries.map((entry) => Card(
+                    child: ExpansionTile(
+                      initiallyExpanded: true,
+                      leading: const Icon(Icons.folder_outlined),
+                      title: Text(entry.key),
+                      subtitle: Text(entry.value.length.toString() + ' tagihan • ' + _rupiah.format(entry.value.fold<int>(0, (sum, bill) => sum + bill.amount))),
+                      children: entry.value.map((bill) {
+                        final due = DateTime(bill.dueDate.year, bill.dueDate.month, bill.dueDate.day);
+                        final days = due.difference(todayDate).inDays;
+                        final overdue = days < 0;
+                        final nearDue = days >= 0 && days <= 3;
+                        final color = overdue ? Colors.red : nearDue ? Colors.orange : Colors.green;
+                        final status = overdue ? 'Terlambat ' + days.abs().toString() + ' hari' : days == 0 ? 'Jatuh tempo hari ini' : 'Jatuh tempo ' + days.toString() + ' hari lagi';
+                        return ListTile(
+                          dense: true,
+                          leading: Icon(overdue ? Icons.warning_amber_rounded : Icons.receipt_long, color: color),
+                          title: Text(bill.title),
+                          subtitle: Text(DateFormat('dd MMM yyyy', 'id_ID').format(bill.dueDate) + ' • ' + status, style: TextStyle(color: color)),
+                          trailing: PopupMenuButton<String>(
+                            onSelected: (action) {
+                              if (action == 'edit') _editBill(bill);
+                              if (action == 'delete') _deleteBill(bill);
+                              if (action == 'pay') _payBill(bill);
+                            },
+                            itemBuilder: (context) => [
+                              const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                              const PopupMenuItem(value: 'delete', child: Text('Hapus')),
+                              const PopupMenuItem(value: 'pay', child: Text('Bayar')),
+                            ],
+                          ),
+                        );
+                      }).toList(),
                     ),
-                  );
-                }),
+                  )).toList();
+                }(),
                 if (paid.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Align(
