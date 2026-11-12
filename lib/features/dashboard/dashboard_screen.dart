@@ -1651,7 +1651,7 @@ class _DebtSectionState extends State<DebtSection> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Hapus rencana?'),
-        content: Text('Data "' + debt.title + '" akan dihapus. Data dengan riwayat pembayaran tidak dapat dihapus.'),
+        content: Text('Data "${debt.title}" akan dihapus. Data dengan riwayat pembayaran tidak dapat dihapus.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Batal')),
           FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Hapus')),
@@ -2010,7 +2010,7 @@ class _BillsSectionState extends State<BillsSection> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Hapus tagihan?'),
-        content: Text('Tagihan "' + bill.title + '" akan dihapus dari daftar.'),
+        content: Text('Tagihan "${bill.title}" akan dihapus dari daftar.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Batal')),
           FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Hapus')),
