@@ -115,4 +115,42 @@ void main() {
     expect(await database.balanceFor(account.id), -15000);
   });
 
+  test('debt payment transactions cannot be edited or deleted directly', () async {
+    await database.addAccount('Tunai', 'cash', 100000);
+    final account = (await database.watchAccounts().first).single;
+    await database.addDebt(
+      direction: 'payable',
+      partyName: 'Penyedia',
+      title: 'Utang barang',
+      amount: 50000,
+    );
+    final debt = (await database.watchDebts().first).single;
+
+    await database.addDebtPayment(
+      debtId: debt.id,
+      accountId: account.id,
+      amount: 20000,
+    );
+    final paymentTransaction =
+        (await database.watchTransactions().first).single;
+
+    expect(
+      () => database.updateTransaction(
+        transactionId: paymentTransaction.id,
+        accountId: account.id,
+        amount: 10000,
+        title: 'Diubah',
+      ),
+      throwsStateError,
+    );
+    expect(
+      () => database.deleteTransaction(paymentTransaction.id),
+      throwsStateError,
+    );
+
+    expect(await database.debtRemaining(debt.id), 30000);
+    expect(await database.balanceFor(account.id), 80000);
+    expect(await database.watchTransactions().first, hasLength(1));
+  });
+
 }
