@@ -627,19 +627,19 @@ class _MonthlyBillsPage extends StatelessWidget {
                 _OverviewLine(label: 'Total tagihan bulanan belum dibayar', value: _rupiah.format(total), color: Colors.red),
                 const Divider(),
                 _OverviewLine(label: afterBills >= 0 ? 'Perkiraan saldo tersisa' : 'Kekurangan dana', value: _rupiah.format(afterBills.abs()), color: afterBills >= 0 ? Colors.green : Colors.red, strong: true),
-                Text(afterBills >= 0 ? 'Saldo mencukupi untuk membayar semua tagihan rutin bulan ini.' : 'Saldo belum mencukupi. Perlu tambahan dana sebesar ' + _rupiah.format(afterBills.abs()) + '.', style: Theme.of(context).textTheme.bodySmall),
+                Text(afterBills >= 0 ? 'Saldo mencukupi untuk membayar semua tagihan rutin bulan ini.' : 'Saldo belum mencukupi. Perlu tambahan dana sebesar ${_rupiah.format(afterBills.abs())}.', style: Theme.of(context).textTheme.bodySmall),
               ]))),
               const SizedBox(height: 8),
               Text('Rincian per kategori', style: Theme.of(context).textTheme.titleMedium),
               if (categories.isEmpty) const Card(child: Padding(padding: EdgeInsets.all(14), child: Text('Tidak ada tagihan rutin yang belum dibayar bulan ini.')))
-              else ...categories.map((entry) => Card(child: ListTile(title: Text(entry.key), subtitle: Text(bills.where((b) => b.category == entry.key).length.toString() + ' tagihan'), trailing: Text(_rupiah.format(entry.value), style: const TextStyle(fontWeight: FontWeight.w600))))),
+              else ...categories.map((entry) => Card(child: ListTile(title: Text(entry.key), subtitle: Text('${bills.where((b) => b.category == entry.key).length} tagihan'), trailing: Text(_rupiah.format(entry.value), style: const TextStyle(fontWeight: FontWeight.w600))))),
               const SizedBox(height: 8),
               Text('Daftar tagihan', style: Theme.of(context).textTheme.titleMedium),
               if (bills.isEmpty) const Text('Semua tagihan rutin bulan ini sudah lunas atau belum ada jadwal.')
               else ...bills.map((bill) => Card(child: ListTile(
                 leading: const Icon(Icons.event_note),
                 title: Text(bill.title),
-                subtitle: Text(bill.category + ' • Jatuh tempo ' + DateFormat('dd MMM yyyy','id_ID').format(bill.dueDate)),
+                subtitle: Text('${bill.category} • Jatuh tempo ${DateFormat('dd MMM yyyy','id_ID').format(bill.dueDate)}'),
                 trailing: Text(_rupiah.format(bill.amount), style: const TextStyle(fontWeight: FontWeight.w600)),
               ))),
             ]);
@@ -666,7 +666,7 @@ class _DebtGroup extends StatelessWidget {
       initiallyExpanded: debts.isNotEmpty,
       leading: Icon(icon),
       title: Text(title),
-      subtitle: Text(debts.length.toString() + ' catatan'),
+      subtitle: Text('${debts.length} catatan'),
       children: debts.isEmpty ? [const ListTile(title: Text('Belum ada data.'))] : debts.map((debt) => FutureBuilder<int>(
         future: database.debtRemaining(debt.id),
         builder: (context, snapshot) {
@@ -675,7 +675,7 @@ class _DebtGroup extends StatelessWidget {
           return ListTile(
             dense: true,
             title: Text(debt.title),
-            subtitle: Text(debt.partyName + ' • Sisa ' + _rupiah.format(remaining) + (debt.dueDate == null ? '' : ' • ' + DateFormat('dd MMM yy','id_ID').format(debt.dueDate!))),
+            subtitle: Text('${debt.partyName} • Sisa ${_rupiah.format(remaining)}${debt.dueDate == null ? '' : ' • ${DateFormat('dd MMM yy','id_ID').format(debt.dueDate!)}'}'),
             trailing: PopupMenuButton<String>(
               onSelected: (action) {
                 if (action == 'edit') onEdit(debt);
@@ -2220,19 +2220,19 @@ class _BillsSectionState extends State<BillsSection> {
                       initiallyExpanded: true,
                       leading: const Icon(Icons.folder_outlined),
                       title: Text(entry.key),
-                      subtitle: Text(entry.value.length.toString() + ' tagihan • ' + _rupiah.format(entry.value.fold<int>(0, (sum, bill) => sum + bill.amount))),
+                      subtitle: Text('${entry.value.length} tagihan • ${_rupiah.format(entry.value.fold<int>(0, (sum, bill) => sum + bill.amount))}'),
                       children: entry.value.map((bill) {
                         final due = DateTime(bill.dueDate.year, bill.dueDate.month, bill.dueDate.day);
                         final days = due.difference(todayDate).inDays;
                         final overdue = days < 0;
                         final nearDue = days >= 0 && days <= 3;
                         final color = overdue ? Colors.red : nearDue ? Colors.orange : Colors.green;
-                        final status = overdue ? 'Terlambat ' + days.abs().toString() + ' hari' : days == 0 ? 'Jatuh tempo hari ini' : 'Jatuh tempo ' + days.toString() + ' hari lagi';
+                        final status = overdue ? 'Terlambat ${days.abs()} hari' : days == 0 ? 'Jatuh tempo hari ini' : 'Jatuh tempo $days hari lagi';
                         return ListTile(
                           dense: true,
                           leading: Icon(overdue ? Icons.warning_amber_rounded : Icons.receipt_long, color: color),
                           title: Text(bill.title),
-                          subtitle: Text(DateFormat('dd MMM yyyy', 'id_ID').format(bill.dueDate) + ' • ' + status, style: TextStyle(color: color)),
+                          subtitle: Text('${DateFormat('dd MMM yyyy', 'id_ID').format(bill.dueDate)} • $status', style: TextStyle(color: color)),
                           trailing: PopupMenuButton<String>(
                             onSelected: (action) {
                               if (action == 'edit') _editBill(bill);
