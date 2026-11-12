@@ -44,6 +44,68 @@ void main() {
     expect(goals.single.targetAmount, 12000000);
   });
 
+  test('goal contribution transfers funds and updates goal progress', () async {
+    await db.addAccount('Operasional', 'Bank', 500000);
+    await db.addAccount('Tabungan', 'Bank', 100000);
+    final accounts = await db.watchAccounts().first;
+    final source = accounts.firstWhere((a) => a.name == 'Operasional');
+    final savings = accounts.firstWhere((a) => a.name == 'Tabungan');
+    await db.saveFinancialGoal(
+      title: 'Dana Darurat',
+      targetAmount: 1000000,
+      savedAmount: 0,
+      targetDate: DateTime(2027, 6, 1),
+    );
+    final goal = (await db.watchFinancialGoals().first).single;
+
+    await db.addGoalContribution(
+      goalId: goal.id,
+      fromAccountId: source.id,
+      toAccountId: savings.id,
+      amount: 250000,
+      note: 'Setoran pertama',
+    );
+
+    expect(await db.balanceFor(source.id), 250000);
+    expect(await db.balanceFor(savings.id), 350000);
+    expect(await db.watchTotalBalance().first, 600000);
+    expect((await db.watchFinancialGoals().first).single.savedAmount, 250000);
+    expect((await db.watchGoalContributions(goal.id).first), hasLength(1));
+
+    final contribution = (await db.watchGoalContributions(goal.id).first).single;
+    await db.deleteTransaction(contribution.id);
+
+    expect(await db.balanceFor(source.id), 500000);
+    expect(await db.balanceFor(savings.id), 100000);
+    expect((await db.watchFinancialGoals().first).single.savedAmount, 0);
+    expect(await db.watchGoalContributions(goal.id).first, isEmpty);
+  });
+
+  test('goal contribution cannot exceed remaining target', () async {
+    await db.addAccount('Operasional', 'Bank', 500000);
+    await db.addAccount('Tabungan', 'Bank', 0);
+    final accounts = await db.watchAccounts().first;
+    await db.saveFinancialGoal(
+      title: 'Laptop',
+      targetAmount: 100000,
+      savedAmount: 75000,
+      targetDate: DateTime(2027, 1, 1),
+    );
+    final goal = (await db.watchFinancialGoals().first).single;
+
+    await expectLater(
+      db.addGoalContribution(
+        goalId: goal.id,
+        fromAccountId: accounts.first.id,
+        toAccountId: accounts.last.id,
+        amount: 30000,
+      ),
+      throwsArgumentError,
+    );
+    expect((await db.watchFinancialGoals().first).single.savedAmount, 75000);
+    expect(await db.balanceFor(accounts.first.id), 500000);
+  });
+
   test('income and expense update account balance', () async {
     await db.addAccount('BNI', 'Bank', 100000);
     final account = await db.watchAccounts().first;
