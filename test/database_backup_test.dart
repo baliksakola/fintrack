@@ -188,4 +188,66 @@ void main() {
     expect(await database.watchTransactions().first, hasLength(1));
   });
 
+  test('concurrent goal contributions cannot exceed the target', () async {
+    await database.addAccount('Sumber', 'cash', 100000);
+    await database.addAccount('Tabungan', 'bank', 0);
+    final accounts = await database.watchAccounts().first;
+    final source = accounts.firstWhere((item) => item.name == 'Sumber');
+    final destination = accounts.firstWhere((item) => item.name == 'Tabungan');
+    await database.saveFinancialGoal(
+      title: 'Laptop',
+      targetAmount: 30000,
+      savedAmount: 0,
+      targetDate: DateTime(2027, 12, 31),
+    );
+    final goal = (await database.watchFinancialGoals().first).single;
+
+    Future<bool> contribute() async {
+      try {
+        await database.addGoalContribution(
+          goalId: goal.id,
+          fromAccountId: source.id,
+          toAccountId: destination.id,
+          amount: 20000,
+        );
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    final results = await Future.wait([contribute(), contribute()]);
+    expect(results.where((success) => success), hasLength(1));
+    final updatedGoal = (await database.watchFinancialGoals().first).single;
+    expect(updatedGoal.savedAmount, 20000);
+    expect(await database.balanceFor(source.id), 80000);
+    expect(await database.balanceFor(destination.id), 20000);
+    expect(await database.watchTransactions().first, hasLength(1));
+  });
+
+  test('financial goal with contribution history cannot be deleted', () async {
+    await database.addAccount('Sumber', 'cash', 100000);
+    await database.addAccount('Tabungan', 'bank', 0);
+    final accounts = await database.watchAccounts().first;
+    final source = accounts.firstWhere((item) => item.name == 'Sumber');
+    final destination = accounts.firstWhere((item) => item.name == 'Tabungan');
+    await database.saveFinancialGoal(
+      title: 'Dana darurat',
+      targetAmount: 50000,
+      savedAmount: 0,
+      targetDate: DateTime(2027, 12, 31),
+    );
+    final goal = (await database.watchFinancialGoals().first).single;
+    await database.addGoalContribution(
+      goalId: goal.id,
+      fromAccountId: source.id,
+      toAccountId: destination.id,
+      amount: 10000,
+    );
+
+    expect(() => database.deleteFinancialGoal(goal.id), throwsStateError);
+    expect(await database.watchFinancialGoals().first, hasLength(1));
+    expect((await database.watchFinancialGoals().first).single.savedAmount, 10000);
+  });
+
 }
