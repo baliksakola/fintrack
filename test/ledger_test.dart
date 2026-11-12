@@ -403,6 +403,38 @@ void main() {
     expect(restored.nextDueDate, DateTime(2026, 12, 1));
   });
 
+  test('recurring schedule can be edited with a finite end date', () async {
+    await db.addAccount('Bank', 'Bank', 100000);
+    final account = (await db.watchAccounts().first).single;
+    await db.addRecurringTransaction(
+      type: 'expense',
+      accountId: account.id,
+      amount: 15000,
+      title: 'Internet lama',
+      firstDueDate: DateTime(2026, 12, 5),
+    );
+    final schedule = (await db.watchRecurringTransactions().first).single;
+
+    await db.updateRecurringTransaction(
+      id: schedule.id,
+      type: 'income',
+      accountId: account.id,
+      amount: 500000,
+      title: 'Honor',
+      category: 'Gaji',
+      nextDueDate: DateTime(2027, 1, 10),
+      endDate: DateTime(2027, 3, 10),
+    );
+
+    final updated = (await db.watchRecurringTransactions().first).single;
+    expect(updated.type, 'income');
+    expect(updated.title, 'Honor');
+    expect(updated.amount, 500000);
+    expect(updated.nextDueDate, DateTime(2027, 1, 10));
+    expect(updated.dayOfMonth, 10);
+    expect(updated.endDate, DateTime(2027, 3, 10));
+  });
+
   test('invalid amount is rejected', () async {
     await db.addAccount('Tunai', 'Tunai', 0);
     final account = (await db.watchAccounts().first).single;
