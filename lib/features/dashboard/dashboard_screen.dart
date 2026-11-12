@@ -1831,29 +1831,44 @@ Future<void> _showTransactionDialog(BuildContext context, AppDatabase db, String
   await showDialog<void>(context: context, builder: (dialogContext) => StatefulBuilder(
     builder: (context, setState) => AlertDialog(
       title: Text(type == 'income' ? 'Catat pemasukan' : 'Catat pengeluaran'),
-      content: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(controller: title, decoration: const InputDecoration(labelText: 'Keterangan')),
-        TextField(controller: amount, keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: 'Nominal (Rp)')),
-        const SizedBox(height: 12),
-        DropdownButtonFormField<String>(
-          initialValue: accountId,
-          items: accounts.map((a) => DropdownMenuItem(value: a.id, child: Text(a.name))).toList(),
-          onChanged: (v) => setState(() => accountId = v ?? accounts.first.id),
-          decoration: const InputDecoration(labelText: 'Rekening'),
-        ),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          initialValue: category,
-          items: categories.map((value) => DropdownMenuItem(value: value, child: Text(value))).toList(),
-          onChanged: (value) => setState(() => category = value ?? categories.first),
-          decoration: const InputDecoration(labelText: 'Kategori'),
-        ),
-      ]),
+      content: SingleChildScrollView(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(
+            controller: title,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(labelText: 'Keterangan'),
+          ),
+          TextField(
+            controller: amount,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Nominal (Rp)'),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: accountId,
+            items: accounts.map((a) => DropdownMenuItem(value: a.id, child: Text(a.name))).toList(),
+            onChanged: (v) => setState(() => accountId = v ?? accounts.first.id),
+            decoration: const InputDecoration(labelText: 'Rekening'),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            initialValue: category,
+            items: categories.map((value) => DropdownMenuItem(value: value, child: Text(value))).toList(),
+            onChanged: (value) => setState(() => category = value ?? categories.first),
+            decoration: const InputDecoration(labelText: 'Kategori'),
+          ),
+        ]),
+      ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Batal')),
         FilledButton(onPressed: () async {
           final value = int.tryParse(amount.text.replaceAll('.', '').replaceAll(',', '')) ?? 0;
+          if (title.text.trim().isEmpty || value <= 0) {
+            ScaffoldMessenger.of(dialogContext).showSnackBar(
+              const SnackBar(content: Text('Isi keterangan dan masukkan nominal lebih dari Rp 0.')),
+            );
+            return;
+          }
           try {
             if (type == 'income') {
               await db.addIncome(accountId: accountId, amount: value, title: title.text, category: category);
@@ -1872,6 +1887,8 @@ Future<void> _showTransactionDialog(BuildContext context, AppDatabase db, String
       ],
     ),
   ));
+  title.dispose();
+  amount.dispose();
 }
 
 Future<void> _showTransferDialog(BuildContext context, AppDatabase db) async {
@@ -1888,30 +1905,49 @@ Future<void> _showTransferDialog(BuildContext context, AppDatabase db) async {
   await showDialog<void>(context: context, builder: (dialogContext) => StatefulBuilder(
     builder: (context, setState) => AlertDialog(
       title: const Text('Transfer antar rekening'),
-      content: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(controller: title, decoration: const InputDecoration(labelText: 'Keterangan')),
-        TextField(controller: amount, keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: 'Nominal (Rp)')),
-        const SizedBox(height: 12),
-        DropdownButtonFormField<String>(
-          initialValue: fromId,
-          items: accounts.map((a) => DropdownMenuItem(value: a.id, child: Text('Dari: ${a.name}'))).toList(),
-          onChanged: (v) => setState(() { fromId = v ?? fromId; if (fromId == toId) {
-            toId = accounts.firstWhere((a) => a.id != fromId).id;
-          } }),
-        ),
-        DropdownButtonFormField<String>(
-          initialValue: toId,
-          items: accounts.map((a) => DropdownMenuItem(value: a.id, child: Text('Ke: ${a.name}'))).toList(),
-          onChanged: (v) => setState(() => toId = v ?? toId),
-        ),
-      ]),
+      content: SingleChildScrollView(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(
+            controller: title,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(labelText: 'Keterangan'),
+          ),
+          TextField(
+            controller: amount,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Nominal (Rp)'),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: fromId,
+            items: accounts.map((a) => DropdownMenuItem(value: a.id, child: Text('Dari: ${a.name}'))).toList(),
+            onChanged: (v) => setState(() {
+              fromId = v ?? fromId;
+              if (fromId == toId) toId = accounts.firstWhere((a) => a.id != fromId).id;
+            }),
+            decoration: const InputDecoration(labelText: 'Rekening asal'),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            initialValue: toId,
+            items: accounts.map((a) => DropdownMenuItem(value: a.id, child: Text('Ke: ${a.name}'))).toList(),
+            onChanged: (v) => setState(() => toId = v ?? toId),
+            decoration: const InputDecoration(labelText: 'Rekening tujuan'),
+          ),
+        ]),
+      ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Batal')),
         FilledButton(onPressed: () async {
           final value = int.tryParse(amount.text.replaceAll('.', '').replaceAll(',', '')) ?? 0;
+          if (title.text.trim().isEmpty || value <= 0 || fromId == toId) {
+            ScaffoldMessenger.of(dialogContext).showSnackBar(
+              const SnackBar(content: Text('Periksa keterangan, nominal, serta rekening asal dan tujuan.')),
+            );
+            return;
+          }
           try {
-            await db.createTransfer(fromAccountId: fromId, toAccountId: toId, amount: value, title: title.text);
+            await db.createTransfer(fromAccountId: fromId, toAccountId: toId, amount: value, title: title.text.trim());
             if (dialogContext.mounted) Navigator.pop(dialogContext);
           } catch (e) {
             if (dialogContext.mounted) {
@@ -1924,6 +1960,8 @@ Future<void> _showTransferDialog(BuildContext context, AppDatabase db) async {
       ],
     ),
   ));
+  title.dispose();
+  amount.dispose();
 }
  
 Future<void> _showEditTransactionDialog(
