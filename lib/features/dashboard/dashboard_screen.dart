@@ -128,12 +128,43 @@ class _OverviewPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Total saldo', style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  Text(
-                    _rupiah.format(total),
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Total saldo',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.account_balance_wallet_outlined,
+                          size: 19,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FittedBox(
+                      alignment: Alignment.centerLeft,
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        _rupiah.format(total),
+                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.6,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 4),
