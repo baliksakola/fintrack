@@ -916,9 +916,152 @@ class _PlanningPage extends StatelessWidget {
       const SizedBox(height: 20),
       BudgetSection(database: database),
       const SizedBox(height: 20),
-      FinancialGoalsSection(database: database),
+      FinancialGoalsSection(database: database),\n      const SizedBox(height: 20),\n      RecurringTransactionsSection(database: database),
     ],
   );
+}
+
+
+class RecurringTransactionsSection extends StatelessWidget {
+  const RecurringTransactionsSection({super.key, required this.database});
+  final AppDatabase database;
+
+  Future<void> _add(BuildContext context) async {
+    final accounts = await database.watchAccounts().first;
+    if (!context.mounted) return;
+    if (accounts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tambahkan rekening terlebih dahulu.')),
+      );
+      return;
+    }
+    final title = TextEditingController();
+    final amount = TextEditingController();
+    String type = 'expense';
+    String accountId = accounts.first.id;
+    String category = _expenseCategories.first;
+    DateTime firstDate = DateTime.now();
+    await showDialog<void>(context: context, builder: (dialogContext) =>
+      StatefulBuilder(builder: (context, setState) => AlertDialog(
+        title: const Text('Jadwal transaksi berulang'),
+        content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'expense', label: Text('Pengeluaran'), icon: Icon(Icons.remove_circle_outline)),
+              ButtonSegment(value: 'income', label: Text('Pemasukan'), icon: Icon(Icons.add_circle_outline)),
+            ],
+            selected: {type},
+            onSelectionChanged: (value) => setState(() {
+              type = value.first;
+              category = type == 'income' ? _incomeCategories.first : _expenseCategories.first;
+            }),
+          ),
+          const SizedBox(height: 12),
+          TextField(controller: title, decoration: const InputDecoration(labelText: 'Keterangan')),
+          TextField(controller: amount, keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Nominal (Rp)')),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            initialValue: accountId,
+            items: accounts.map((a) => DropdownMenuItem(value: a.id, child: Text(a.name))).toList(),
+            onChanged: (v) => setState(() => accountId = v ?? accountId),
+            decoration: const InputDecoration(labelText: 'Rekening'),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            initialValue: category,
+            items: (type == 'income' ? _incomeCategories : _expenseCategories)
+              .map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
+            onChanged: (v) => setState(() => category = v ?? category),
+            decoration: const InputDecoration(labelText: 'Kategori'),
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Mulai pada'),
+            subtitle: Text(DateFormat('dd MMMM yyyy', 'id_ID').format(firstDate)),
+            trailing: const Icon(Icons.calendar_today),
+            onTap: () async {
+              final picked = await showDatePicker(context: context,
+                initialDate: firstDate, firstDate: DateTime(2000), lastDate: DateTime(2100));
+              if (picked != null) setState(() => firstDate = picked);
+            },
+          ),
+          const Align(alignment: Alignment.centerLeft,
+            child: Text('Jadwal diulang setiap bulan. Jadwal tanpa batas akhir terus aktif sampai dinonaktifkan.')),
+        ])),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Batal')),
+          FilledButton(onPressed: () async {
+            final value = int.tryParse(amount.text.replaceAll('.', '').replaceAll(',', '')) ?? 0;
+            try {
+              await database.addRecurringTransaction(type: type, accountId: accountId,
+                amount: value, title: title.text, category: category, firstDueDate: firstDate);
+              if (dialogContext.mounted) Navigator.pop(dialogContext);
+            } catch (e) {
+              if (dialogContext.mounted) ScaffoldMessenger.of(dialogContext)
+                .showSnackBar(SnackBar(content: Text(e.toString())));
+            }
+          }, child: const Text('Simpan jadwal')),
+        ],
+      )));
+  }
+
+  Future<void> _process(BuildContext context) async {
+    try {
+      final count = await database.processDueRecurringTransactions();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(count == 0 ? 'Tidak ada jadwal yang jatuh tempo.' : '$count transaksi berhasil dibuat.'),
+      ));
+    } catch (e) {
+      if (context.mounted) ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    Row(children: [
+      Expanded(child: Text('Transaksi berulang', style: Theme.of(context).textTheme.titleMedium)),
+      IconButton(onPressed: () => _add(context), icon: const Icon(Icons.add_circle_outline), tooltip: 'Tambah jadwal'),
+    ]),
+    Card(child: Column(children: [
+      ListTile(
+        leading: const Icon(Icons.autorenew),
+        title: const Text('Proses jadwal jatuh tempo'),
+        subtitle: const Text('Membuat transaksi bulanan yang belum dicatat ke saldo.'),
+        trailing: const Icon(Icons.play_arrow),
+        onTap: () => _process(context),
+      ),
+      const Divider(height: 1),
+      StreamBuilder<List<RecurringTransaction>>(
+        stream: database.watchRecurringTransactions(),
+        builder: (context, snapshot) {
+          final items = snapshot.data ?? <RecurringTransaction>[];
+          if (items.isEmpty) return const ListTile(title: Text('Belum ada jadwal transaksi.'));
+          return Column(children: items.map((item) => ListTile(
+            leading: Icon(item.type == 'income' ? Icons.add_circle_outline : Icons.remove_circle_outline),
+            title: Text(item.title),
+            subtitle: Text('${item.type == 'income' ? 'Pemasukan' : 'Pengeluaran'} • ${_rupiah.format(item.amount)} • Berikutnya: ${DateFormat('dd MMM yyyy', 'id_ID').format(item.nextDueDate)}${item.isActive ? '' : ' • Nonaktif'}'),
+            trailing: PopupMenuButton<String>(
+              onSelected: (action) async {
+                try {
+                  if (action == 'toggle') await database.setRecurringTransactionActive(item.id, !item.isActive);
+                  if (action == 'delete') await database.deleteRecurringTransaction(item.id);
+                } catch (e) {
+                  if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+                }
+              },
+              itemBuilder: (_) => [
+                PopupMenuItem(value: 'toggle', child: Text(item.isActive ? 'Nonaktifkan' : 'Aktifkan')),
+                const PopupMenuItem(value: 'delete', child: Text('Hapus jadwal')),
+              ],
+            ),
+          )).toList());
+        },
+      ),
+    ])),
+  ]);
 }
 
 class _ReportsPage extends StatelessWidget {
