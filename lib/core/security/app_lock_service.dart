@@ -8,6 +8,10 @@ class AppLockService {
   static const _storage = FlutterSecureStorage();
   static const _pinKey = 'fintrack_app_pin';
   static const _biometricKey = 'fintrack_biometric_enabled';
+  static const _failedAttemptsKey = 'fintrack_pin_failed_attempts';
+  static const _lockUntilKey = 'fintrack_pin_lock_until';
+  static const _maxPinAttempts = 5;
+  static const _lockDuration = Duration(seconds: 30);
   final LocalAuthentication _auth = LocalAuthentication();
 
   Future<bool> hasPin() async => (await _storage.read(key: _pinKey)) != null;
@@ -19,8 +23,42 @@ class AppLockService {
     await _storage.write(key: _pinKey, value: pin);
   }
 
-  Future<bool> verifyPin(String pin) async =>
-      (await _storage.read(key: _pinKey)) == pin;
+  Future<bool> verifyPin(String pin) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final lockUntil = int.tryParse(
+          await _storage.read(key: _lockUntilKey) ?? '',
+        ) ??
+        0;
+    if (lockUntil > now) {
+      final seconds = ((lockUntil - now) / 1000).ceil();
+      throw StateError('Terlalu banyak percobaan. Coba lagi dalam $seconds detik.');
+    }
+
+    final savedPin = await _storage.read(key: _pinKey);
+    if (savedPin == pin) {
+      await _storage.delete(key: _failedAttemptsKey);
+      await _storage.delete(key: _lockUntilKey);
+      return true;
+    }
+
+    final attempts = (int.tryParse(
+              await _storage.read(key: _failedAttemptsKey) ?? '',
+            ) ??
+            0) +
+        1;
+    if (attempts >= _maxPinAttempts) {
+      final until = now + _lockDuration.inMilliseconds;
+      await _storage.write(key: _lockUntilKey, value: until.toString());
+      await _storage.delete(key: _failedAttemptsKey);
+      throw StateError('PIN salah 5 kali. Akses dikunci selama 30 detik.');
+    }
+
+    await _storage.write(
+      key: _failedAttemptsKey,
+      value: attempts.toString(),
+    );
+    return false;
+  }
 
   Future<bool> biometricEnabled() async =>
       (await _storage.read(key: _biometricKey)) == 'true';
