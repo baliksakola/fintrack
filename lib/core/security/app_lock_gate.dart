@@ -63,7 +63,8 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
       _pin.clear();
       _confirm.clear();
     } catch (e) {
-      setState(() => _error = e.toString());
+      final message = e.toString().replaceFirst('Bad state: ', '');
+      setState(() => _error = message);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
