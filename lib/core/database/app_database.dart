@@ -376,6 +376,9 @@ class AppDatabase extends _$AppDatabase {
       (select(accounts)..where((a) => a.archived.equals(false))
         ..orderBy([(a) => OrderingTerm.asc(a.name)])).watch();
 
+  Future<List<Account>> getAllAccounts() =>
+      (select(accounts)..orderBy([(a) => OrderingTerm.asc(a.name)])).get();
+
   Stream<int> watchTotalBalance() => customSelect(
     'SELECT COALESCE((SELECT SUM(opening_balance) FROM accounts WHERE archived = 0), 0) + '
     'COALESCE((SELECT SUM(le.amount_delta) FROM ledger_entries le '
