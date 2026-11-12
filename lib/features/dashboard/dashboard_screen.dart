@@ -3964,7 +3964,7 @@ class _FinanceReportsSectionState extends State<FinanceReportsSection> {
               tx.type != 'transfer' && tx.occurredAt.isBefore(start)
             ).fold<int>(0, (sum, tx) =>
               sum + (tx.type == 'income' ? tx.amount : -tx.amount));
-            final openingAccounts = widget.database.watchAccounts().first;
+            final openingAccounts = widget.database.getAllAccounts();
 
             return Column(
               children: [
@@ -3997,10 +3997,12 @@ class _FinanceReportsSectionState extends State<FinanceReportsSection> {
                       ),
                       Card(child: ListTile(
                         title: const Text('Saldo awal periode'),
+                        subtitle: const Text('Gabungan seluruh rekening, termasuk arsip'),
                         trailing: Text(_rupiah.format(opening)),
                       )),
                       Card(child: ListTile(
                         title: const Text('Saldo akhir periode'),
+                        subtitle: const Text('Saldo awal ditambah arus kas bersih periode'),
                         trailing: Text(_rupiah.format(opening + net)),
                       )),
                     ]);
