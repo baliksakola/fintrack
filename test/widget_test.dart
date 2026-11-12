@@ -20,8 +20,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(find.text('Ringkasan'), findsOneWidget);
-    expect(find.text('Home'), findsOneWidget);
+    expect(find.text('Ringkasan'), findsNWidgets(2));
+    expect(find.text('Home'), findsNothing);
     expect(find.text('Aktivitas'), findsOneWidget);
     expect(find.text('Rencana'), findsOneWidget);
     expect(find.text('Kalender'), findsOneWidget);
