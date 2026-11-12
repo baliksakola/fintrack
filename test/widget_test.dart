@@ -24,8 +24,8 @@ void main() {
     expect(find.text('Home'), findsOneWidget);
     expect(find.text('Aktivitas'), findsOneWidget);
     expect(find.text('Rencana'), findsOneWidget);
-    expect(find.text('Bulanan'), findsOneWidget);
-    expect(find.text('Laporan'), findsOneWidget);
+    expect(find.text('Kalender'), findsOneWidget);
+    expect(find.text('Prediksi kondisi keuangan'), findsOneWidget);
     expect(find.text('Lainnya'), findsOneWidget);
     expect(find.text('Total saldo'), findsOneWidget);
     expect(find.text('Aksi cepat'), findsOneWidget);
