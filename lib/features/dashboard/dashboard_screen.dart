@@ -33,14 +33,7 @@ class DashboardScreen extends ConsumerStatefulWidget {
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   int _selectedIndex = 0;
 
-  static const _titles = [
-    'Ringkasan',
-    'Aktivitas',
-    'Tagihan & Rencana',
-    'Tagihan Bulanan',
-    'Laporan',
-    'Lainnya',
-  ];
+  static const _titles = ['Ringkasan', 'Aktivitas', 'Rencana', 'Kalender Keuangan', 'Lainnya'];
 
   @override
   Widget build(BuildContext context) {
@@ -49,8 +42,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       _OverviewPage(database: db),
       _ActivityPage(database: db),
       _PlanningPage(database: db),
-      _MonthlyBillsPage(database: db),
-      _ReportsPage(database: db),
+      _CalendarPage(database: db),
       _MorePage(database: db),
     ];
 
@@ -93,12 +85,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           NavigationDestination(
             icon: Icon(Icons.calendar_month_outlined),
             selectedIcon: Icon(Icons.calendar_month),
-            label: 'Bulanan',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.analytics_outlined),
-            selectedIcon: Icon(Icons.analytics),
-            label: 'Laporan',
+            label: 'Kalender',
           ),
           NavigationDestination(
             icon: Icon(Icons.more_horiz),
@@ -192,6 +179,8 @@ class _OverviewPage extends StatelessWidget {
       ),
       const SizedBox(height: 16),
       _WeeklyCashFlowCard(database: database),
+      const SizedBox(height: 12),
+      _FinancialForecastCard(database: database),
       const SizedBox(height: 12),
       _DetailedMonthlyOverview(database: database),
       const SizedBox(height: 20),
@@ -696,6 +685,150 @@ class _DebtGroup extends StatelessWidget {
   );
 }
 
+
+class _FinancialForecastCard extends StatefulWidget {
+  const _FinancialForecastCard({required this.database});
+  final AppDatabase database;
+  @override
+  State<_FinancialForecastCard> createState() => _FinancialForecastCardState();
+}
+class _FinancialForecastCardState extends State<_FinancialForecastCard> {
+  int _days = 30;
+  @override
+  Widget build(BuildContext context) {
+    final today = DateTime.now();
+    final start = DateTime(today.year, today.month, today.day);
+    final end = start.add(Duration(days: _days));
+    return StreamBuilder<int>(
+      stream: widget.database.watchTotalBalance(),
+      builder: (context, bs) => StreamBuilder<List<Bill>>(
+        stream: widget.database.watchBills(),
+        builder: (context, billsSnapshot) => StreamBuilder<List<Debt>>(
+          stream: widget.database.watchDebts(),
+          builder: (context, debtsSnapshot) {
+            final bills = (billsSnapshot.data ?? <Bill>[]).where((b) => !b.isPaid && !b.dueDate.isBefore(start) && b.dueDate.isBefore(end)).toList();
+            final debts = (debtsSnapshot.data ?? <Debt>[]).where((d) => d.dueDate != null && !d.dueDate!.isBefore(start) && d.dueDate!.isBefore(end)).toList();
+            final out = bills.fold<int>(0, (s,b) => s+b.amount) + debts.where((d)=>d.direction=='payable').fold<int>(0,(s,d)=>s+d.amount);
+            final incoming = debts.where((d)=>d.direction=='receivable').fold<int>(0,(s,d)=>s+d.amount);
+            final balance = bs.data ?? 0;
+            final projected = balance - out + incoming;
+            return Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Expanded(child: Text('Prediksi kondisi keuangan', style: Theme.of(context).textTheme.titleMedium)),
+                SegmentedButton<int>(segments: const [ButtonSegment(value: 30,label:Text('30 hari')),ButtonSegment(value:90,label:Text('90 hari'))], selected: {_days}, onSelectionChanged: (v)=>setState(()=>_days=v.first)),
+              ]),
+              const SizedBox(height: 8),
+              _OverviewLine(label:'Saldo saat ini',value:_rupiah.format(balance)),
+              _OverviewLine(label:'Tagihan & utang',value:'- \${_rupiah.format(out)}',color:Colors.red),
+              _OverviewLine(label:'Piutang jatuh tempo',value:'+ \${_rupiah.format(incoming)}',color:Colors.green),
+              const Divider(),
+              _OverviewLine(label:'Perkiraan saldo akhir',value:_rupiah.format(projected),color:projected>=0?Colors.green:Colors.red,strong:true),
+              Text('Perkiraan hanya menghitung saldo saat ini, tagihan, utang dan piutang yang jatuh tempo. Pemasukan lain serta pengeluaran harian belum diperhitungkan.',style:Theme.of(context).textTheme.bodySmall),
+            ])));
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class FinancialGoalsSection extends StatefulWidget {
+  const FinancialGoalsSection({super.key, required this.database});
+  final AppDatabase database;
+  @override
+  State<FinancialGoalsSection> createState()=>_FinancialGoalsSectionState();
+}
+class _FinancialGoalsSectionState extends State<FinancialGoalsSection> {
+  Future<void> _edit({FinancialGoal? goal}) async {
+    final title=TextEditingController(text:goal?.title??'');
+    final target=TextEditingController(text:goal?.targetAmount.toString()??'');
+    final saved=TextEditingController(text:goal?.savedAmount.toString()??'0');
+    var date=goal?.targetDate??DateTime(DateTime.now().year,DateTime.now().month+6,DateTime.now().day);
+    final ok=await showDialog<bool>(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,setStateDialog)=>AlertDialog(
+      title:Text(goal==null?'Buat target tabungan':'Edit target tabungan'),
+      content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
+        TextField(controller:title,decoration:const InputDecoration(labelText:'Nama target')),
+        TextField(controller:target,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Nominal target (Rp)')),
+        TextField(controller:saved,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Sudah terkumpul (Rp)')),
+        ListTile(contentPadding:EdgeInsets.zero,title:const Text('Target tanggal'),subtitle:Text(DateFormat('dd MMM yyyy','id_ID').format(date)),trailing:const Icon(Icons.calendar_month),onTap:()async{final d=await showDatePicker(context:ctx,initialDate:date,firstDate:DateTime.now(),lastDate:DateTime(2100));if(d!=null)setStateDialog(()=>date=d);}),
+      ])),
+      actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Batal')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Simpan'))],
+    )));
+    if(ok==true){
+      try{
+        await widget.database.saveFinancialGoal(goalId:goal?.id,title:title.text,targetAmount:int.tryParse(target.text.replaceAll('.','').replaceAll(',',''))??0,savedAmount:int.tryParse(saved.text.replaceAll('.','').replaceAll(',',''))??0,targetDate:date);
+      }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}
+    }
+    title.dispose();target.dispose();saved.dispose();
+  }
+  Future<void> _delete(FinancialGoal goal)async{
+    final ok=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(title:const Text('Hapus target?'),content:Text('Target "\${goal.title}" akan dihapus.'),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Batal')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Hapus'))]));
+    if(ok==true)await widget.database.deleteFinancialGoal(goal.id);
+  }
+  @override
+  Widget build(BuildContext context)=>Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+    Row(children:[Expanded(child:Text('Target tabungan',style:Theme.of(context).textTheme.titleMedium)),TextButton.icon(onPressed:_edit,icon:const Icon(Icons.add),label:const Text('Tambah'))]),
+    StreamBuilder<List<FinancialGoal>>(stream:widget.database.watchFinancialGoals(),builder:(context,snapshot){
+      final goals=snapshot.data??<FinancialGoal>[];
+      if(goals.isEmpty)return const Card(child:Padding(padding:EdgeInsets.all(14),child:Text('Belum ada target tabungan.')));
+      return Column(children:goals.map((goal){
+        final remaining=goal.targetAmount-goal.savedAmount;
+        final months=(goal.targetDate.year-DateTime.now().year)*12+goal.targetDate.month-DateTime.now().month;
+        final monthly=remaining<=0?0:(months<=0?remaining:(remaining/months).ceil());
+        final progress=(goal.savedAmount/goal.targetAmount).clamp(0.0,1.0);
+        return Card(child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+          Row(children:[Expanded(child:Text(goal.title,style:const TextStyle(fontWeight:FontWeight.w600))),PopupMenuButton<String>(onSelected:(v){if(v=='edit')_edit(goal:goal);if(v=='delete')_delete(goal);},itemBuilder:(_)=>const [PopupMenuItem(value:'edit',child:Text('Edit')),PopupMenuItem(value:'delete',child:Text('Hapus'))])]),
+          Text('\${_rupiah.format(goal.savedAmount)} dari \${_rupiah.format(goal.targetAmount)}'),
+          const SizedBox(height:8),LinearProgressIndicator(value:progress),
+          _OverviewLine(label:'Sisa target',value:_rupiah.format(remaining)),
+          _OverviewLine(label:'Perlu ditabung per bulan',value:_rupiah.format(monthly)),
+          Text('Target \${DateFormat('dd MMM yyyy','id_ID').format(goal.targetDate)} • \${(progress*100).round()}%',style:Theme.of(context).textTheme.bodySmall),
+        ])));
+      }).toList());
+    }),
+  ]);
+}
+
+class _CalendarPage extends StatefulWidget {
+  const _CalendarPage({required this.database});
+  final AppDatabase database;
+  @override
+  State<_CalendarPage> createState()=>_CalendarPageState();
+}
+class _CalendarPageState extends State<_CalendarPage>{
+  DateTime _month=DateTime(DateTime.now().year,DateTime.now().month);
+  @override
+  Widget build(BuildContext context){
+    final start=DateTime(_month.year,_month.month);
+    final end=DateTime(_month.year,_month.month+1);
+    return ListView(padding:const EdgeInsets.all(16),children:[
+      Row(children:[
+        IconButton(onPressed:()=>setState(()=>_month=DateTime(_month.year,_month.month-1)),icon:const Icon(Icons.chevron_left)),
+        Expanded(child:Text(DateFormat('MMMM yyyy','id_ID').format(_month),textAlign:TextAlign.center,style:Theme.of(context).textTheme.titleLarge)),
+        IconButton(onPressed:()=>setState(()=>_month=DateTime(_month.year,_month.month+1),),icon:const Icon(Icons.chevron_right)),
+      ]),
+      StreamBuilder<List<Bill>>(stream:widget.database.watchBills(),builder:(context,bs)=>StreamBuilder<List<Debt>>(stream:widget.database.watchDebts(),builder:(context,ds){
+        final events=<_CalendarEvent>[];
+        for(final b in bs.data??<Bill>[]){if(!b.isPaid&&!b.dueDate.isBefore(start)&&b.dueDate.isBefore(end)){events.add(_CalendarEvent(date:b.dueDate,title:b.title,detail:b.category,amount:b.amount,income:false,type:'Tagihan'));}}
+        for(final d in ds.data??<Debt>[]){final date=d.dueDate;if(date!=null&&!date.isBefore(start)&&date.isBefore(end)){events.add(_CalendarEvent(date:date,title:d.title,detail:d.partyName,amount:d.amount,income:d.direction=='receivable',type:d.direction=='receivable'?'Piutang':'Utang'));}}
+        events.sort((a,b)=>a.date.compareTo(b.date));
+        final outgoing=events.where((e)=>!e.income).fold<int>(0,(s,e)=>s+e.amount);
+        final incoming=events.where((e)=>e.income).fold<int>(0,(s,e)=>s+e.amount);
+        return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+          Row(children:[Expanded(child:_OverviewMetric(title:'Kewajiban',value:outgoing,color:Colors.red)),const SizedBox(width:8),Expanded(child:_OverviewMetric(title:'Piutang',value:incoming,color:Colors.green))]),
+          const SizedBox(height:12),Text('Agenda keuangan',style:Theme.of(context).textTheme.titleMedium),
+          if(events.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(14),child:Text('Tidak ada tagihan atau jatuh tempo bulan ini.')))
+          else ...events.map((e)=>Card(child:ListTile(leading:CircleAvatar(child:Icon(e.income?Icons.call_received:Icons.event_note)),title:Text(e.title),subtitle:Text('\${DateFormat('dd MMM yyyy','id_ID').format(e.date)} • \${e.type} • \${e.detail}'),trailing:Text('\${e.income?'+':'-'}\${_rupiah.format(e.amount)}',style:TextStyle(fontWeight:FontWeight.w600,color:e.income?Colors.green:Colors.red))))),
+        ]);
+      })),
+    ]);
+  }
+}
+class _CalendarEvent{
+  const _CalendarEvent({required this.date,required this.title,required this.detail,required this.amount,required this.income,required this.type});
+  final DateTime date;final String title;final String detail;final int amount;final bool income;final String type;
+}
+
 class _PlanningPage extends StatelessWidget {
   const _PlanningPage({required this.database});
   final AppDatabase database;
@@ -709,6 +842,8 @@ class _PlanningPage extends StatelessWidget {
       DebtSection(database: database),
       const SizedBox(height: 20),
       BudgetSection(database: database),
+      const SizedBox(height: 20),
+      FinancialGoalsSection(database: database),
     ],
   );
 }
@@ -799,6 +934,7 @@ class _MorePage extends StatelessWidget {
       const SizedBox(height: 8),
       const AppSecuritySection(),
       const SizedBox(height: 16),
+      ListTile(leading: const Icon(Icons.analytics_outlined), title: const Text('Laporan keuangan'), subtitle: const Text('Lihat dan ekspor laporan PDF atau Excel.'), trailing: const Icon(Icons.chevron_right), onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => Scaffold(appBar: AppBar(title: const Text('Laporan keuangan')), body: _ReportsPage(database: database))))),
       BackupSection(database: database),
     ],
   );
