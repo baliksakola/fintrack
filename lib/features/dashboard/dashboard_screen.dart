@@ -2183,7 +2183,7 @@ Future<void> _showEditTransactionDialog(
   if (!accounts.any((account) => account.id == transaction.accountId)) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Transaksi dari rekening arsip tidak dapat diedit. Aktifkan kembali rekening tersebut terlebih dahulu.'),
+        content: Text('Transaksi ini terkait rekening yang tidak aktif. Riwayat tetap tersimpan, tetapi transaksi tidak dapat diedit.'),
       ),
     );
     return;
