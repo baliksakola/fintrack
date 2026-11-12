@@ -728,6 +728,12 @@ class AppDatabase extends _$AppDatabase {
     if (current.type == 'transfer') {
       throw StateError('Transaksi transfer belum dapat diedit.');
     }
+    final linkedDebtPayment = await (select(debtPayments)
+      ..where((payment) => payment.transactionId.equals(transactionId)))
+      .getSingleOrNull();
+    if (linkedDebtPayment != null) {
+      throw StateError('Transaksi pembayaran utang/piutang harus dikelola melalui menu utang/piutang.');
+    }
     final account = await (select(accounts)..where((a) =>
       a.id.equals(accountId) & a.archived.equals(false))).getSingleOrNull();
     if (account == null) throw StateError('Rekening tidak ditemukan.');
@@ -772,6 +778,12 @@ class AppDatabase extends _$AppDatabase {
     final current = await (select(financeTransactions)
       ..where((t) => t.id.equals(transactionId))).getSingleOrNull();
     if (current == null) throw StateError('Transaksi tidak ditemukan.');
+    final linkedDebtPayment = await (select(debtPayments)
+      ..where((payment) => payment.transactionId.equals(transactionId)))
+      .getSingleOrNull();
+    if (linkedDebtPayment != null) {
+      throw StateError('Transaksi pembayaran utang/piutang harus dikelola melalui menu utang/piutang.');
+    }
     await transaction(() async {
       final goalId = current.category?.startsWith('goal:') == true
           ? current.category!.substring(5)
