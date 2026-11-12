@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'core/database/app_database.dart';
@@ -10,6 +11,12 @@ Future<void> main() async {
   await initializeDateFormatting('id_ID');
   await BillNotificationService.instance.initialize();
   final db = await AppDatabase.open();
+  try {
+    await db.processDueRecurringTransactions();
+  } catch (error, stackTrace) {
+    debugPrint('Gagal memproses transaksi berulang: $error');
+    debugPrintStack(stackTrace: stackTrace);
+  }
   runApp(ProviderScope(
     overrides: [databaseProvider.overrideWithValue(db)],
     child: const FinTrackApp(),
