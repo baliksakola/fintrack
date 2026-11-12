@@ -185,7 +185,8 @@ class _OverviewPage extends StatelessWidget {
         children: [
           Expanded(
             child: _QuickAction(
-              icon: Icons.add_circle_outline,
+              icon: Icons.south_west_rounded,
+              color: const Color(0xFF15966F),
               label: 'Pemasukan',
               onTap: () => _showTransactionDialog(context, database, 'income'),
             ),
@@ -193,7 +194,8 @@ class _OverviewPage extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: _QuickAction(
-              icon: Icons.remove_circle_outline,
+              icon: Icons.north_east_rounded,
+              color: const Color(0xFFE05B62),
               label: 'Pengeluaran',
               onTap: () => _showTransactionDialog(context, database, 'expense'),
             ),
@@ -201,7 +203,8 @@ class _OverviewPage extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: _QuickAction(
-              icon: Icons.swap_horiz,
+              icon: Icons.swap_horiz_rounded,
+              color: const Color(0xFF3978D5),
               label: 'Transfer',
               onTap: () => _showTransferDialog(context, database),
             ),
@@ -1549,11 +1552,13 @@ class _QuickAction extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onTap,
+    required this.color,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -1565,7 +1570,7 @@ class _QuickAction extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 6),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1573,10 +1578,10 @@ class _QuickAction extends StatelessWidget {
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color: colors.primaryContainer,
+                  color: color.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(icon, size: 22, color: colors.onPrimaryContainer),
+                child: Icon(icon, size: 22, color: color),
               ),
               const SizedBox(height: 9),
               Text(
