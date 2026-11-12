@@ -3728,13 +3728,14 @@ class _FinanceReportsSectionState extends State<FinanceReportsSection> {
       final sheet = book['Laporan Keuangan'];
       sheet.appendRow([xls.TextCellValue('LAPORAN KEUANGAN FINTRACK')]);
       sheet.appendRow([xls.TextCellValue(_dateLabel(start, end))]);
-      sheet.appendRow([xls.TextCellValue('Saldo awal'), xls.IntCellValue(opening)]);
-      sheet.appendRow([xls.TextCellValue('Pemasukan'), xls.IntCellValue(income)]);
-      sheet.appendRow([xls.TextCellValue('Pengeluaran'), xls.IntCellValue(expense)]);
-      sheet.appendRow([xls.TextCellValue('Saldo akhir'), xls.IntCellValue(opening + income - expense)]);
+      sheet.appendRow([xls.TextCellValue('Cakupan saldo'), xls.TextCellValue('Seluruh rekening, termasuk arsip')]);
+      sheet.appendRow([xls.TextCellValue('Saldo awal (Rp)'), xls.IntCellValue(opening)]);
+      sheet.appendRow([xls.TextCellValue('Pemasukan (Rp)'), xls.IntCellValue(income)]);
+      sheet.appendRow([xls.TextCellValue('Pengeluaran (Rp)'), xls.IntCellValue(expense)]);
+      sheet.appendRow([xls.TextCellValue('Saldo akhir (Rp)'), xls.IntCellValue(opening + income - expense)]);
       sheet.appendRow([]);
       sheet.appendRow([xls.TextCellValue('REKAP PENGELUARAN PER KATEGORI')]);
-      sheet.appendRow([xls.TextCellValue('Kategori'), xls.TextCellValue('Total')]);
+      sheet.appendRow([xls.TextCellValue('Kategori'), xls.TextCellValue('Total (Rp)')]);
       final sortedCategories = categories.entries.toList()
         ..sort((a, b) => b.value.compareTo(a.value));
       for (final entry in sortedCategories) {
@@ -3747,7 +3748,7 @@ class _FinanceReportsSectionState extends State<FinanceReportsSection> {
       sheet.appendRow([
         xls.TextCellValue('Tanggal'), xls.TextCellValue('Jenis'),
         xls.TextCellValue('Keterangan'), xls.TextCellValue('Kategori'),
-        xls.TextCellValue('Nominal'),
+        xls.TextCellValue('Nominal (Rp)'),
       ]);
       final sorted = [...items]..sort((x, y) => x.occurredAt.compareTo(y.occurredAt));
       for (final tx in sorted) {
@@ -3787,7 +3788,7 @@ class _FinanceReportsSectionState extends State<FinanceReportsSection> {
     try {
       final doc = pw.Document();
       final detail = <List<String>>[
-        ['Tanggal', 'Jenis', 'Keterangan', 'Kategori', 'Nominal'],
+        ['Tanggal', 'Jenis', 'Keterangan', 'Kategori', 'Nominal (Rp)'],
         ...([...items]..sort((x, y) => x.occurredAt.compareTo(y.occurredAt)))
             .map((tx) => [
               DateFormat('dd/MM/yy').format(tx.occurredAt),
@@ -3812,7 +3813,8 @@ class _FinanceReportsSectionState extends State<FinanceReportsSection> {
         pw.Text(_dateLabel(start, end)),
         pw.SizedBox(height: 12),
         pw.TableHelper.fromTextArray(data: [
-          ['Ringkasan', 'Nominal'],
+          ['Ringkasan', 'Nominal (Rp)'],
+          ['Cakupan saldo', 'Seluruh rekening, termasuk arsip'],
           ['Saldo awal', _rupiah.format(opening)],
           ['Pemasukan', _rupiah.format(income)],
           ['Pengeluaran', _rupiah.format(expense)],
