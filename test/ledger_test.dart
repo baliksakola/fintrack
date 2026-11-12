@@ -219,29 +219,35 @@ void main() {
     final bni = accounts.firstWhere((account) => account.name == 'BNI');
     final cash = accounts.firstWhere((account) => account.name == 'Tunai');
 
-    final bniBalances = <int>[];
-    final subscription = db.watchAccountBalance(bni.id).listen(bniBalances.add);
-    await Future<void>.delayed(Duration.zero);
+    final balances = StreamIterator(db.watchAccountBalance(bni.id));
+    expect(await balances.moveNext(), isTrue);
+    expect(balances.current, 200000);
+
     await db.addIncome(
       accountId: bni.id,
       amount: 40000,
       title: 'Honor',
     );
+    expect(await balances.moveNext(), isTrue);
+    expect(balances.current, 240000);
+
     await db.addExpense(
       accountId: bni.id,
       amount: 10000,
       title: 'Makan',
     );
+    expect(await balances.moveNext(), isTrue);
+    expect(balances.current, 230000);
+
     await db.createTransfer(
       fromAccountId: bni.id,
       toAccountId: cash.id,
       amount: 30000,
       title: 'Tarik tunai',
     );
-    await Future<void>.delayed(const Duration(milliseconds: 20));
-    await subscription.cancel();
-
-    expect(bniBalances, containsAllInOrder([200000, 240000, 230000, 200000]));
+    expect(await balances.moveNext(), isTrue);
+    expect(balances.current, 200000);
+    await balances.cancel();
     expect(await db.balanceFor(bni.id), 200000);
     expect(await db.balanceFor(cash.id), 80000);
     expect(await db.watchTotalBalance().first, 280000);
