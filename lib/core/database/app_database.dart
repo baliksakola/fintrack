@@ -421,6 +421,47 @@ class AppDatabase extends _$AppDatabase {
     ));
   }
 
+  Future<void> updateRecurringTransaction({
+    required String id,
+    required String type,
+    required String accountId,
+    required int amount,
+    required String title,
+    String? category,
+    required DateTime nextDueDate,
+    DateTime? endDate,
+  }) async {
+    if (!['income', 'expense'].contains(type) || amount <= 0 || title.trim().isEmpty) {
+      throw ArgumentError('Data transaksi berulang tidak valid.');
+    }
+    final existing = await (select(recurringTransactions)
+      ..where((r) => r.id.equals(id))).getSingleOrNull();
+    if (existing == null) throw StateError('Jadwal transaksi tidak ditemukan.');
+    final account = await (select(accounts)
+      ..where((a) => a.id.equals(accountId) & a.archived.equals(false)))
+      .getSingleOrNull();
+    if (account == null) throw StateError('Rekening tidak ditemukan.');
+    final first = DateTime(nextDueDate.year, nextDueDate.month, nextDueDate.day);
+    final end = endDate == null ? null : DateTime(endDate.year, endDate.month, endDate.day);
+    if (end != null && end.isBefore(first)) {
+      throw ArgumentError('Tanggal akhir tidak boleh sebelum jadwal berikutnya.');
+    }
+    await (update(recurringTransactions)
+      ..where((r) => r.id.equals(id))).write(
+        RecurringTransactionsCompanion(
+          type: Value(type),
+          accountId: Value(accountId),
+          amount: Value(amount),
+          title: Value(title.trim()),
+          category: Value(category?.trim().isEmpty == true ? null : category?.trim()),
+          nextDueDate: Value(first),
+          dayOfMonth: Value(first.day),
+          endDate: Value(end),
+          isActive: const Value(true),
+        ),
+      );
+  }
+
   Future<void> setRecurringTransactionActive(String id, bool active) async {
     final item = await (select(recurringTransactions)
       ..where((r) => r.id.equals(id))).getSingleOrNull();
