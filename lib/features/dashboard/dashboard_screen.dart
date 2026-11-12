@@ -182,6 +182,10 @@ class _OverviewPage extends StatelessWidget {
       const SizedBox(height: 12),
       _FinancialForecastCard(database: database),
       const SizedBox(height: 12),
+      _FinancialHealthCard(database: database),
+      const SizedBox(height: 12),
+      _SpendingInsightsCard(database: database),
+      const SizedBox(height: 12),
       _DetailedMonthlyOverview(database: database),
       const SizedBox(height: 20),
       Row(
@@ -205,6 +209,124 @@ class _OverviewPage extends StatelessWidget {
   );
 }
 
+
+
+class _FinancialHealthCard extends StatelessWidget {
+  const _FinancialHealthCard({required this.database});
+  final AppDatabase database;
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month);
+    final end = DateTime(now.year, now.month + 1);
+    return StreamBuilder<List<FinanceTransaction>>(
+      stream: database.watchTransactions(),
+      builder: (context, txSnapshot) => StreamBuilder<List<Budget>>(
+        stream: database.watchBudgetsForMonth(now),
+        builder: (context, budgetSnapshot) {
+          final transactions = (txSnapshot.data ?? <FinanceTransaction>[]).where((tx) =>
+            tx.type != 'transfer' && !tx.occurredAt.isBefore(start) && tx.occurredAt.isBefore(end)
+          );
+          var income = 0;
+          var expense = 0;
+          for (final tx in transactions) {
+            if (tx.type == 'income') income += tx.amount;
+            if (tx.type == 'expense') expense += tx.amount;
+          }
+          final budgets = budgetSnapshot.data ?? <Budget>[];
+          final byCategory = <String, int>{};
+          for (final tx in txSnapshot.data ?? <FinanceTransaction>[]) {
+            if (tx.type == 'expense' && !tx.occurredAt.isBefore(start) && tx.occurredAt.isBefore(end)) {
+              final category = tx.category?.trim().isNotEmpty == true ? tx.category! : 'Tanpa kategori';
+              byCategory[category] = (byCategory[category] ?? 0) + tx.amount;
+            }
+          }
+          final hasIncome = income > 0;
+          final savingsRate = hasIncome ? (income - expense) / income : 0.0;
+          final savingsPoints = !hasIncome ? 0 : savingsRate >= 0.30 ? 70 : savingsRate >= 0.20 ? 60 : savingsRate >= 0.10 ? 45 : savingsRate >= 0 ? 30 : 10;
+          final totalBudget = budgets.fold<int>(0, (sum, b) => sum + b.monthlyLimit);
+          final overBudget = budgets.any((b) => (byCategory[b.category] ?? 0) > b.monthlyLimit);
+          final budgetPoints = budgets.isEmpty ? 0 : overBudget ? 0 : 30;
+          final score = savingsPoints + budgetPoints;
+          final status = !hasIncome ? 'Belum cukup data pemasukan' : budgets.isEmpty ? 'Lengkapi anggaran untuk skor penuh' : score >= 85 ? 'Kondisi cukup sehat' : score >= 60 ? 'Perlu dijaga' : 'Perlu perbaikan';
+          return Card(child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Indikator kesehatan keuangan', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 4),
+              Text('Berdasarkan arus kas dan kepatuhan anggaran bulan ini.', style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(height: 12),
+              Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+                SizedBox(width: 68, height: 68, child: Stack(fit: StackFit.expand, children: [
+                  CircularProgressIndicator(value: hasIncome ? score / 100 : 0, strokeWidth: 7),
+                  Center(child: Text(hasIncome ? '$score' : '—', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold))),
+                ])),
+                const SizedBox(width: 14),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(status, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text('Arus kas bersih: ${_rupiah.format(income - expense)}'),
+                  Text('Tingkat tabungan: ${hasIncome ? (savingsRate * 100).toStringAsFixed(1) : '—'}%', style: Theme.of(context).textTheme.bodySmall),
+                ])),
+              ]),
+              const SizedBox(height: 8),
+              _OverviewLine(label: 'Poin arus kas', value: '$savingsPoints / 70'),
+              _OverviewLine(label: 'Poin anggaran', value: budgets.isEmpty ? 'Belum dinilai' : '$budgetPoints / 30', color: overBudget ? Colors.red : null),
+              if (budgets.isNotEmpty) _OverviewLine(label: 'Total batas anggaran', value: _rupiah.format(totalBudget)),
+              const SizedBox(height: 4),
+              Text('Skor ini indikator sederhana, bukan penilaian kredit. Utang, aset, dan dana darurat belum diperhitungkan.', style: Theme.of(context).textTheme.bodySmall),
+            ]),
+          ));
+        },
+      ),
+    );
+  }
+}
+
+class _SpendingInsightsCard extends StatelessWidget {
+  const _SpendingInsightsCard({required this.database});
+  final AppDatabase database;
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month);
+    final end = DateTime(now.year, now.month + 1);
+    return StreamBuilder<List<FinanceTransaction>>(
+      stream: database.watchTransactions(),
+      builder: (context, snapshot) {
+        final totals = <String, int>{};
+        var expense = 0;
+        var income = 0;
+        for (final tx in snapshot.data ?? <FinanceTransaction>[]) {
+          if (tx.occurredAt.isBefore(start) || !tx.occurredAt.isBefore(end)) continue;
+          if (tx.type == 'income') income += tx.amount;
+          if (tx.type == 'expense') {
+            expense += tx.amount;
+            final category = tx.category?.trim().isNotEmpty == true ? tx.category! : 'Tanpa kategori';
+            totals[category] = (totals[category] ?? 0) + tx.amount;
+          }
+        }
+        final sorted = totals.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+        return Card(child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Analisis pengeluaran', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            _OverviewLine(label: 'Total pengeluaran bulan ini', value: _rupiah.format(expense), strong: true),
+            _OverviewLine(label: 'Total pemasukan bulan ini', value: _rupiah.format(income)),
+            _OverviewLine(label: 'Rasio pengeluaran terhadap pemasukan', value: income == 0 ? 'Belum tersedia' : '${(expense * 100 / income).toStringAsFixed(1)}%'),
+            const Divider(),
+            Text('Kategori pengeluaran terbesar', style: Theme.of(context).textTheme.bodyMedium),
+            if (sorted.isEmpty)
+              const Padding(padding: EdgeInsets.only(top: 6), child: Text('Belum ada data pengeluaran bulan ini.'))
+            else ...sorted.take(3).map((entry) => _OverviewCategoryLine(label: entry.key, amount: entry.value, total: expense)),
+          ]),
+        ));
+      },
+    );
+  }
+}
 
 class _DetailedMonthlyOverview extends StatelessWidget {
   const _DetailedMonthlyOverview({required this.database});
