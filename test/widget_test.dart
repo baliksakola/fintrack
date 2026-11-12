@@ -1,3 +1,4 @@
+import 'package:material_ui/material_ui.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -13,7 +14,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [databaseProvider.overrideWithValue(db)],
-        child: const DashboardScreen(),
+        child: const MaterialApp(home: DashboardScreen()),
       ),
     );
     await tester.pump();
