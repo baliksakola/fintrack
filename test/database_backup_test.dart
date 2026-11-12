@@ -57,4 +57,36 @@ void main() {
     expect(goals, hasLength(1));
     expect(goals.single.title, 'Dana pendidikan');
   });
+  test('monthly recurring transactions catch up and clamp month-end dates', () async {
+    await database.addAccount('Tunai', 'cash', 0);
+    final account = (await database.watchAccounts().first).single;
+
+    await database.addRecurringTransaction(
+      type: 'expense',
+      accountId: account.id,
+      amount: 10000,
+      title: 'Tagihan bulanan',
+      firstDueDate: DateTime(2026, 10, 31),
+      endDate: DateTime(2026, 12, 31),
+    );
+
+    final created = await database.processDueRecurringTransactions(
+      throughDate: DateTime(2026, 12, 31),
+    );
+
+    expect(created, 3);
+    final transactions = await database.watchTransactions().first;
+    expect(transactions, hasLength(3));
+    expect(
+      transactions.map((item) => item.occurredAt.day).toSet(),
+      {30, 31},
+    );
+    expect(await database.balanceFor(account.id), -30000);
+
+    final schedules = await database.watchRecurringTransactions().first;
+    expect(schedules, hasLength(1));
+    expect(schedules.single.isActive, isFalse);
+    expect(schedules.single.nextDueDate, DateTime(2027, 1, 31));
+  });
+
 }
