@@ -346,4 +346,36 @@ void main() {
     expect(await database.watchTotalBalance().first, 75000);
   });
 
+
+  test('concurrent bill payments create only one expense transaction', () async {
+    await database.addAccount('Tunai', 'cash', 100000);
+    final account = (await database.watchAccounts().first).single;
+    await database.addBill(
+      title: 'Listrik',
+      category: 'Tagihan',
+      amount: 25000,
+      dueDate: DateTime(2026, 11, 12),
+      isMonthly: false,
+    );
+    final bill = (await database.watchBills().first).single;
+
+    Future<bool> pay() async {
+      try {
+        await database.markBillPaid(
+          billId: bill.id,
+          accountId: account.id,
+        );
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    final results = await Future.wait([pay(), pay()]);
+    expect(results.where((success) => success), hasLength(1));
+    expect(await database.watchTransactions().first, hasLength(1));
+    expect(await database.balanceFor(account.id), 75000);
+    expect((await database.watchBills().first).single.isPaid, isTrue);
+  });
+
 }
