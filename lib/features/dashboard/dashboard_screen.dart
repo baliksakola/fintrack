@@ -1132,7 +1132,19 @@ class _CalendarPageState extends State<_CalendarPage>{
       const SizedBox(height:12),
       Card(
         margin: EdgeInsets.zero,
-        child: Row(children:[
+        clipBehavior: Clip.antiAlias,
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.72),
+                Theme.of(context).colorScheme.surface,
+              ],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+          ),
+          child: Row(children:[
           IconButton(
             tooltip: 'Bulan sebelumnya',
             onPressed:()=>setState(()=>_month=DateTime(_month.year,_month.month-1)),
@@ -1149,6 +1161,7 @@ class _CalendarPageState extends State<_CalendarPage>{
             icon:const Icon(Icons.chevron_right),
           ),
         ]),
+        ),
       ),
       StreamBuilder<List<Bill>>(stream:widget.database.watchBills(),builder:(context,bs)=>StreamBuilder<List<Debt>>(stream:widget.database.watchDebts(),builder:(context,ds){
         final events=<_CalendarEvent>[];
@@ -1161,7 +1174,33 @@ class _CalendarPageState extends State<_CalendarPage>{
           Row(children:[Expanded(child:_OverviewMetric(title:'Kewajiban',value:outgoing,color:Colors.red)),const SizedBox(width:8),Expanded(child:_OverviewMetric(title:'Piutang',value:incoming,color:Colors.green))]),
           const SizedBox(height:12),Text('Agenda keuangan',style:Theme.of(context).textTheme.titleMedium),
           if(events.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(14),child:Text('Tidak ada tagihan atau jatuh tempo bulan ini.')))
-          else ...events.map((e)=>Card(child:ListTile(leading:CircleAvatar(child:Icon(e.income?Icons.call_received:Icons.event_note)),title:Text(e.title),subtitle:Text('${DateFormat('dd MMM yyyy','id_ID').format(e.date)} • ${e.type} • ${e.detail}'),trailing:Text('${e.income?'+':'-'}${_rupiah.format(e.amount)}',style:TextStyle(fontWeight:FontWeight.w600,color:e.income?Colors.green:Colors.red))))),
+          else ...events.map((e) {
+            final accent = e.income
+                ? const Color(0xFF15966F)
+                : e.type == 'Tagihan'
+                    ? const Color(0xFFE05B62)
+                    : const Color(0xFFE08A36);
+            return Card(
+              clipBehavior: Clip.antiAlias,
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: accent.withValues(alpha: 0.13),
+                  child: Icon(
+                    e.income ? Icons.south_west_rounded : e.type == 'Tagihan'
+                        ? Icons.receipt_long_outlined
+                        : Icons.event_available_outlined,
+                    color: accent,
+                  ),
+                ),
+                title: Text(e.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: Text('${DateFormat('dd MMM yyyy','id_ID').format(e.date)} • ${e.type} • ${e.detail}'),
+                trailing: Text(
+                  '${e.income?'+':'-'}${_rupiah.format(e.amount)}',
+                  style: TextStyle(fontWeight: FontWeight.w700, color: accent),
+                ),
+              ),
+            );
+          }),
         ]);
       })),
     ]);
@@ -1566,7 +1605,15 @@ class _MorePage extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: Column(children: [
           ListTile(
-            leading: const Icon(Icons.analytics_outlined),
+            leading: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFF3978D5).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: const Icon(Icons.analytics_outlined, color: Color(0xFF3978D5)),
+            ),
             title: const Text('Laporan keuangan'),
             subtitle: const Text('Lihat dan ekspor laporan PDF atau Excel.'),
             trailing: const Icon(Icons.chevron_right),
