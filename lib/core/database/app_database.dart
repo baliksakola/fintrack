@@ -561,8 +561,8 @@ class AppDatabase extends _$AppDatabase {
     final transactionId = _uuid.v4();
     final now = DateTime.now();
     final title = note?.trim().isNotEmpty == true
-        ? 'Setoran \${goal.title}: \${note!.trim()}'
-        : 'Setoran target: \${goal.title}';
+        ? 'Setoran ${goal.title}: ${note!.trim()}'
+        : 'Setoran target: ${goal.title}';
     await transaction(() async {
       await into(financeTransactions).insert(FinanceTransactionsCompanion.insert(
         id: transactionId, type: 'transfer', accountId: fromAccountId,
@@ -751,6 +751,22 @@ class AppDatabase extends _$AppDatabase {
       ..where((t) => t.id.equals(transactionId))).getSingleOrNull();
     if (current == null) throw StateError('Transaksi tidak ditemukan.');
     await transaction(() async {
+      final goalId = current.category?.startsWith('goal:') == true
+          ? current.category!.substring(5)
+          : null;
+      if (goalId != null) {
+        final goal = await (select(financialGoals)
+          ..where((g) => g.id.equals(goalId))).getSingleOrNull();
+        if (goal != null) {
+          await (update(financialGoals)..where((g) => g.id.equals(goalId))).write(
+            FinancialGoalsCompanion(
+              savedAmount: Value(
+                (goal.savedAmount - current.amount).clamp(0, goal.targetAmount).toInt(),
+              ),
+            ),
+          );
+        }
+      }
       await (delete(ledgerEntries)
         ..where((entry) => entry.transactionId.equals(transactionId))).go();
       await (delete(transfers)
