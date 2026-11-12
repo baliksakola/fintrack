@@ -112,6 +112,9 @@ jobs:
           if not manifest.exists():
               raise SystemExit("AndroidManifest.xml not found")
           xml = manifest.read_text()
+          xml, label_count = re.subn(r'android:label="[^"]+"', 'android:label="FinTrack Paday"', xml, count=1)
+          if label_count == 0:
+              raise SystemExit("Application label attribute not found in AndroidManifest.xml")
           permission = '    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />'
           if "android.permission.RECEIVE_BOOT_COMPLETED" not in xml:
               xml, count = re.subn(
