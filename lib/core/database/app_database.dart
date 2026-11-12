@@ -26,7 +26,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -51,8 +51,13 @@ class AppDatabase extends _$AppDatabase {
       if (from < 6) {
         await m.createTable(financialGoals);
       }
-      if (from < 7) {
-        await m.createTable(recurringTransactions);
+      if (from < 8) {
+        final existingRecurringTable = await customSelect(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'recurring_transactions'",
+        ).get();
+        if (existingRecurringTable.isEmpty) {
+          await m.createTable(recurringTransactions);
+        }
       }
     },
     beforeOpen: (details) async {
