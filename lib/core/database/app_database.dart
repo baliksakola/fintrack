@@ -945,10 +945,15 @@ class AppDatabase extends _$AppDatabase {
     final transferRows = rows('transfers');
     final budgetRows = rows('budgets');
     final billRows = rows('bills');
-    final debtRows = decoded['debts'] is List ? rows('debts') : <Map<String, dynamic>>[];
-    final debtPaymentRows = decoded['debtPayments'] is List ? rows('debtPayments') : <Map<String, dynamic>>[];
-    final goalRows = decoded['financialGoals'] is List ? rows('financialGoals') : <Map<String, dynamic>>[];
-    final recurringRows = decoded['recurringTransactions'] is List ? rows('recurringTransactions') : <Map<String, dynamic>>[];
+    List<Map<String, dynamic>> optionalRows(String key) {
+      if (!decoded.containsKey(key)) return <Map<String, dynamic>>[];
+      return rows(key);
+    }
+
+    final debtRows = optionalRows('debts');
+    final debtPaymentRows = optionalRows('debtPayments');
+    final goalRows = optionalRows('financialGoals');
+    final recurringRows = optionalRows('recurringTransactions');
 
     DateTime date(Map<String, dynamic> row, String key) {
       final value = row[key];
