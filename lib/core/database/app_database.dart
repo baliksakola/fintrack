@@ -720,7 +720,7 @@ class AppDatabase extends _$AppDatabase {
         if (goal != null) {
           await (update(financialGoals)..where((g) => g.id.equals(goalId))).write(
             FinancialGoalsCompanion(
-              savedAmount: Value((goal.savedAmount - current.amount).clamp(0, goal.targetAmount)),
+              savedAmount: Value((goal.savedAmount - current.amount).clamp(0, goal.targetAmount).toInt()),
             ),
           );
         }
