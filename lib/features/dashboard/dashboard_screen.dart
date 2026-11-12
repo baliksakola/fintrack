@@ -1783,25 +1783,41 @@ Future<void> _showAccountDialog(BuildContext context, AppDatabase db) async {
   await showDialog<void>(context: context, builder: (dialogContext) => StatefulBuilder(
     builder: (context, setState) => AlertDialog(
       title: const Text('Tambah rekening'),
-      content: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(controller: name, decoration: const InputDecoration(labelText: 'Nama rekening')),
-        TextField(controller: balance, keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: 'Saldo awal (Rp)')),
-        const SizedBox(height: 12),
-        DropdownButtonFormField<String>(
-          initialValue: type,
-          items: const ['Bank', 'E-Wallet', 'Tunai', 'Tabungan', 'Lainnya']
-            .map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
-          onChanged: (v) => setState(() => type = v ?? 'Bank'),
-          decoration: const InputDecoration(labelText: 'Jenis rekening'),
-        ),
-      ]),
+      content: SingleChildScrollView(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(
+            controller: name,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(labelText: 'Nama rekening'),
+          ),
+          TextField(
+            controller: balance,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Saldo awal (Rp)'),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: type,
+            items: const ['Bank', 'E-Wallet', 'Tunai', 'Tabungan', 'Lainnya']
+              .map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
+            onChanged: (v) => setState(() => type = v ?? 'Bank'),
+            decoration: const InputDecoration(labelText: 'Jenis rekening'),
+          ),
+        ]),
+      ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Batal')),
         FilledButton(onPressed: () async {
-          final amount = int.tryParse(balance.text.replaceAll('.', '').replaceAll(',', '')) ?? -1;
+          final amountText = balance.text.trim();
+          final amount = int.tryParse(amountText.replaceAll('.', '').replaceAll(',', ''));
+          if (name.text.trim().isEmpty || amount == null || amount < 0) {
+            ScaffoldMessenger.of(dialogContext).showSnackBar(
+              const SnackBar(content: Text('Nama rekening wajib diisi dan saldo awal tidak boleh negatif.')),
+            );
+            return;
+          }
           try {
-            await db.addAccount(name.text, type, amount);
+            await db.addAccount(name.text.trim(), type, amount);
             if (dialogContext.mounted) Navigator.pop(dialogContext);
           } catch (e) {
             if (dialogContext.mounted) {
@@ -1814,6 +1830,8 @@ Future<void> _showAccountDialog(BuildContext context, AppDatabase db) async {
       ],
     ),
   ));
+  name.dispose();
+  balance.dispose();
 }
 
 Future<void> _showTransactionDialog(BuildContext context, AppDatabase db, String type) async {
