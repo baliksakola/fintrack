@@ -804,21 +804,58 @@ class _DebtGroup extends StatelessWidget {
   final void Function(Debt, int) onPay;
 
   @override
-  Widget build(BuildContext context) => Card(
-    child: ExpansionTile(
+  Widget build(BuildContext context) {
+    final accent = title.toLowerCase().contains('piutang')
+        ? const Color(0xFF15966F)
+        : const Color(0xFFE08A36);
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
       initiallyExpanded: debts.isNotEmpty,
-      leading: Icon(icon),
-      title: Text(title),
+      leading: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: accent.withValues(alpha: 0.13),
+          borderRadius: BorderRadius.circular(13),
+        ),
+        child: Icon(icon, color: accent),
+      ),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
       subtitle: Text('${debts.length} catatan'),
       children: debts.isEmpty ? [const ListTile(title: Text('Belum ada data.'))] : debts.map((debt) => FutureBuilder<int>(
         future: database.debtRemaining(debt.id),
         builder: (context, snapshot) {
           final remaining = snapshot.data ?? debt.amount;
           final paid = remaining <= 0;
+          final paidAmount = (debt.amount - remaining).clamp(0, debt.amount);
+          final progress = debt.amount > 0 ? paidAmount / debt.amount : 0.0;
           return ListTile(
             dense: true,
-            title: Text(debt.title),
-            subtitle: Text('${debt.partyName} • Sisa ${_rupiah.format(remaining)}${debt.dueDate == null ? '' : ' • ${DateFormat('dd MMM yy','id_ID').format(debt.dueDate!)}'}'),
+            leading: CircleAvatar(
+              radius: 17,
+              backgroundColor: accent.withValues(alpha: 0.12),
+              child: Icon(paid ? Icons.check_rounded : Icons.payments_outlined,
+                size: 17, color: accent),
+            ),
+            title: Text(debt.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('${debt.partyName} • Sisa ${_rupiah.format(remaining)}${debt.dueDate == null ? '' : ' • ${DateFormat('dd MMM yy','id_ID').format(debt.dueDate!)}'}'),
+                const SizedBox(height: 6),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: LinearProgressIndicator(
+                    value: progress.clamp(0.0, 1.0).toDouble(),
+                    minHeight: 5,
+                    color: accent,
+                    backgroundColor: accent.withValues(alpha: 0.12),
+                  ),
+                ),
+              ],
+            ),
             trailing: PopupMenuButton<String>(
               onSelected: (action) {
                 if (action == 'edit') onEdit(debt);
@@ -834,8 +871,9 @@ class _DebtGroup extends StatelessWidget {
           );
         },
       )).toList(),
-    ),
-  );
+      ),
+    );
+  }
 }
 
 
@@ -3413,10 +3451,21 @@ class _BudgetSectionState extends State<BudgetSection> {
                             children: [
                               Row(
                                 children: [
-                                  Expanded(
-                                    child: Text(budget.category,
-                                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                                  Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: color.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(12),
                                   ),
+                                  child: Icon(Icons.category_outlined,
+                                    size: 19, color: color),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(budget.category,
+                                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                                ),
                                   IconButton(
                                     tooltip: 'Ubah anggaran',
                                     onPressed: () => _showBudgetDialog(existing: budget),
