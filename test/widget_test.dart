@@ -35,6 +35,22 @@ void main() {
     expect(find.text('Prediksi kondisi keuangan'), findsOneWidget);
     expect(find.text('Lainnya'), findsOneWidget);
 
+    await tester.tap(find.text('Aktivitas').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Aktivitas keuangan'), findsOneWidget);
+
+    await tester.tap(find.text('Rencana').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Rencana keuangan'), findsOneWidget);
+
+    await tester.tap(find.text('Kalender').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Kalender keuangan'), findsOneWidget);
+
+    await tester.tap(find.text('Lainnya').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Kelola keamanan, laporan, dan salinan cadangan data FinTrack.'), findsOneWidget);
+
     await db.closeDatabase();
   });
 }
