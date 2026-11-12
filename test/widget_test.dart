@@ -25,10 +25,15 @@ void main() {
     expect(find.text('Aktivitas'), findsOneWidget);
     expect(find.text('Rencana'), findsOneWidget);
     expect(find.text('Kalender'), findsOneWidget);
-    expect(find.text('Prediksi kondisi keuangan'), findsOneWidget);
-    expect(find.text('Lainnya'), findsOneWidget);
     expect(find.text('Total saldo'), findsOneWidget);
     expect(find.text('Aksi cepat'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Prediksi kondisi keuangan'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Prediksi kondisi keuangan'), findsOneWidget);
+    expect(find.text('Lainnya'), findsOneWidget);
 
     await db.closeDatabase();
   });
