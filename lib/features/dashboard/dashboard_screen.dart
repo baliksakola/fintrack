@@ -1636,36 +1636,60 @@ class _AccountsList extends StatelessWidget {
             ),
             itemBuilder: (context, index) {
               final account = accounts[index];
+              final accountColor = account.type == 'Tunai'
+                  ? const Color(0xFF15966F)
+                  : account.type == 'E-Wallet'
+                      ? const Color(0xFF8B5CC7)
+                      : const Color(0xFF3978D5);
+              final accountIcon = account.type == 'Tunai'
+                  ? Icons.payments_outlined
+                  : account.type == 'E-Wallet'
+                      ? Icons.account_balance_wallet_outlined
+                      : Icons.account_balance_outlined;
               return Card(
                 margin: EdgeInsets.zero,
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            account.type == 'Tunai'
-                                ? Icons.payments_outlined
-                                : account.type == 'E-Wallet'
-                                    ? Icons.account_balance_wallet_outlined
-                                    : Icons.account_balance_outlined,
-                            size: 19,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              account.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.labelLarge,
+                clipBehavior: Clip.antiAlias,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        accountColor.withValues(alpha: 0.10),
+                        Theme.of(context).colorScheme.surface,
+                      ],
+                      begin: Alignment.topRight,
+                      end: Alignment.bottomLeft,
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                color: accountColor.withValues(alpha: 0.14),
+                                borderRadius: BorderRadius.circular(11),
+                              ),
+                              child: Icon(accountIcon, size: 19, color: accountColor),
                             ),
-                          ),
-                        ],
-                      ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                account.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       FutureBuilder<int>(
                         future: database.balanceFor(account.id),
                         builder: (context, balance) => Text(
@@ -1677,13 +1701,28 @@ class _AccountsList extends StatelessWidget {
                           ),
                         ),
                       ),
-                      Text(
-                        account.type,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        Row(
+                          children: [
+                            Container(
+                              width: 7,
+                              height: 7,
+                              decoration: BoxDecoration(
+                                color: accountColor,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              account.type,
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               );
@@ -1741,12 +1780,14 @@ class _RecentTransactions extends StatelessWidget {
                     dense: true,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
                     leading: CircleAvatar(
-                      radius: 18,
+                      radius: 19,
+                      backgroundColor: amountColor.withValues(alpha: 0.12),
                       child: Icon(
                         isTransfer
-                            ? Icons.swap_horiz
-                            : isIncome ? Icons.south_west : Icons.north_east,
+                            ? Icons.swap_horiz_rounded
+                            : isIncome ? Icons.south_west_rounded : Icons.north_east_rounded,
                         size: 18,
+                        color: amountColor,
                       ),
                     ),
                     title: Text(
