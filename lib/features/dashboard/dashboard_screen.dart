@@ -2180,13 +2180,31 @@ Future<void> _showEditTransactionDialog(
 ) async {
   final accounts = await db.watchAccounts().first;
   if (!context.mounted || accounts.isEmpty) return;
+  if (!accounts.any((account) => account.id == transaction.accountId)) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Transaksi dari rekening arsip tidak dapat diedit. Aktifkan kembali rekening tersebut terlebih dahulu.'),
+      ),
+    );
+    return;
+  }
   final title = TextEditingController(text: transaction.title);
   final amount = TextEditingController(text: transaction.amount.toString());
-  String accountId = accounts.any((a) => a.id == transaction.accountId)
-      ? transaction.accountId
-      : accounts.first.id;
-  final categories = transaction.type == 'income' ? _incomeCategories : _expenseCategories;
-  String category = categories.contains(transaction.category) ? transaction.category! : categories.first;
+  String accountId = transaction.accountId;
+  final categories = [
+    ...(transaction.type == 'income' ? _incomeCategories : _expenseCategories),
+  ];
+  final existingCategory = transaction.category?.trim();
+  if (existingCategory != null &&
+      existingCategory.isNotEmpty &&
+      !categories.contains(existingCategory)) {
+    categories.add(existingCategory);
+  }
+  String category = existingCategory != null &&
+          existingCategory.isNotEmpty &&
+          categories.contains(existingCategory)
+      ? existingCategory
+      : categories.first;
 
   await showDialog<void>(
     context: context,
