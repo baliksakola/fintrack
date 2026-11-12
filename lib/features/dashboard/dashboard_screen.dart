@@ -708,23 +708,35 @@ class _FinancialForecastCardState extends State<_FinancialForecastCard> {
           builder: (context, debtsSnapshot) {
             final bills = (billsSnapshot.data ?? <Bill>[]).where((b) => !b.isPaid && !b.dueDate.isBefore(start) && b.dueDate.isBefore(end)).toList();
             final debts = (debtsSnapshot.data ?? <Debt>[]).where((d) => d.dueDate != null && !d.dueDate!.isBefore(start) && d.dueDate!.isBefore(end)).toList();
-            final out = bills.fold<int>(0, (s,b) => s+b.amount) + debts.where((d)=>d.direction=='payable').fold<int>(0,(s,d)=>s+d.amount);
-            final incoming = debts.where((d)=>d.direction=='receivable').fold<int>(0,(s,d)=>s+d.amount);
             final balance = bs.data ?? 0;
-            final projected = balance - out + incoming;
-            return Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Expanded(child: Text('Prediksi kondisi keuangan', style: Theme.of(context).textTheme.titleMedium)),
-                SegmentedButton<int>(segments: const [ButtonSegment(value: 30,label:Text('30 hari')),ButtonSegment(value:90,label:Text('90 hari'))], selected: {_days}, onSelectionChanged: (v)=>setState(()=>_days=v.first)),
-              ]),
-              const SizedBox(height: 8),
-              _OverviewLine(label:'Saldo saat ini',value:_rupiah.format(balance)),
-              _OverviewLine(label:'Tagihan & utang',value:'- \${_rupiah.format(out)}',color:Colors.red),
-              _OverviewLine(label:'Piutang jatuh tempo',value:'+ \${_rupiah.format(incoming)}',color:Colors.green),
-              const Divider(),
-              _OverviewLine(label:'Perkiraan saldo akhir',value:_rupiah.format(projected),color:projected>=0?Colors.green:Colors.red,strong:true),
-              Text('Perkiraan hanya menghitung saldo saat ini, tagihan, utang dan piutang yang jatuh tempo. Pemasukan lain serta pengeluaran harian belum diperhitungkan.',style:Theme.of(context).textTheme.bodySmall),
-            ])));
+            return FutureBuilder<List<int>>(
+              future: Future.wait(debts.map((d) => widget.database.debtRemaining(d.id))),
+              builder: (context, remainingSnapshot) {
+                final remaining = remainingSnapshot.data ?? debts.map((d) => d.amount).toList();
+                var payable = 0;
+                var receivable = 0;
+                for (var i = 0; i < debts.length; i++) {
+                  if (debts[i].direction == 'payable') payable += remaining[i];
+                  if (debts[i].direction == 'receivable') receivable += remaining[i];
+                }
+                final billTotal = bills.fold<int>(0, (s,b) => s+b.amount);
+                final out = billTotal + payable;
+                final projected = balance - out + receivable;
+                return Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Expanded(child: Text('Prediksi kondisi keuangan', style: Theme.of(context).textTheme.titleMedium)),
+                    SegmentedButton<int>(segments: const [ButtonSegment(value: 30,label:Text('30 hari')),ButtonSegment(value:90,label:Text('90 hari'))], selected: {_days}, onSelectionChanged: (v)=>setState(()=>_days=v.first)),
+                  ]),
+                  const SizedBox(height: 8),
+                  _OverviewLine(label:'Saldo saat ini',value:_rupiah.format(balance)),
+                  _OverviewLine(label:'Tagihan & utang',value:'- ${_rupiah.format(out)}',color:Colors.red),
+                  _OverviewLine(label:'Piutang jatuh tempo',value:'+ ${_rupiah.format(receivable)}',color:Colors.green),
+                  const Divider(),
+                  _OverviewLine(label:'Perkiraan saldo akhir',value:_rupiah.format(projected),color:projected>=0?Colors.green:Colors.red,strong:true),
+                  Text('Perkiraan hanya menghitung saldo saat ini, tagihan, serta sisa utang/piutang yang jatuh tempo. Pemasukan lain dan pengeluaran harian belum diperhitungkan.',style:Theme.of(context).textTheme.bodySmall),
+                ])));
+              },
+            );
           },
         ),
       ),
@@ -750,7 +762,7 @@ class _FinancialGoalsSectionState extends State<FinancialGoalsSection> {
         TextField(controller:title,decoration:const InputDecoration(labelText:'Nama target')),
         TextField(controller:target,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Nominal target (Rp)')),
         TextField(controller:saved,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Sudah terkumpul (Rp)')),
-        ListTile(contentPadding:EdgeInsets.zero,title:const Text('Target tanggal'),subtitle:Text(DateFormat('dd MMM yyyy','id_ID').format(date)),trailing:const Icon(Icons.calendar_month),onTap:()async{final d=await showDatePicker(context:ctx,initialDate:date,firstDate:DateTime.now(),lastDate:DateTime(2100));if(d!=null)setStateDialog(()=>date=d);}),
+        ListTile(contentPadding:EdgeInsets.zero,title:const Text('Target tanggal'),subtitle:Text(DateFormat('dd MMM yyyy','id_ID').format(date)),trailing:const Icon(Icons.calendar_month),onTap:()async{final d=await showDatePicker(context:ctx,initialDate:date,firstDate:DateTime(2020),lastDate:DateTime(2100));if(d!=null)setStateDialog(()=>date=d);}),
       ])),
       actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Batal')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Simpan'))],
     )));
