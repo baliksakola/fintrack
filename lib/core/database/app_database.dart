@@ -378,7 +378,8 @@ class AppDatabase extends _$AppDatabase {
 
   Stream<int> watchTotalBalance() => customSelect(
     'SELECT COALESCE((SELECT SUM(opening_balance) FROM accounts WHERE archived = 0), 0) + '
-    'COALESCE((SELECT SUM(amount_delta) FROM ledger_entries), 0) AS total',
+    'COALESCE((SELECT SUM(le.amount_delta) FROM ledger_entries le '
+    'INNER JOIN accounts a ON a.id = le.account_id WHERE a.archived = 0), 0) AS total',
     readsFrom: {accounts, ledgerEntries},
   ).watch().map((rows) => rows.first.read<int>('total'));
 
