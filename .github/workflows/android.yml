@@ -116,6 +116,24 @@ jobs:
           if label_count == 0:
               raise SystemExit("Application label attribute not found in AndroidManifest.xml")
           permission = '    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />'
+          biometric_permission = '    <uses-permission android:name="android.permission.USE_BIOMETRIC" />'
+          if "android.permission.USE_BIOMETRIC" not in xml:
+              xml, count = re.subn(
+                  r"(<manifest\\b[^>]*>)", r"\\1\\n" + biometric_permission, xml, count=1
+              )
+              if count == 0:
+                  raise SystemExit("Manifest root tag not found for biometric permission")
+          # local_auth requires a FragmentActivity host on Android.
+          activity_files = list(Path("android/app/src/main").rglob("MainActivity.kt"))
+          if not activity_files:
+              raise SystemExit("MainActivity.kt not found after Android project generation")
+          activity = activity_files[0]
+          activity_content = activity.read_text()
+          activity_content = activity_content.replace(
+              "import io.flutter.embedding.android.FlutterActivity",
+              "import io.flutter.embedding.android.FlutterFragmentActivity",
+          ).replace(": FlutterActivity()", ": FlutterFragmentActivity()")
+          activity.write_text(activity_content)
           if "android.permission.RECEIVE_BOOT_COMPLETED" not in xml:
               xml, count = re.subn(
                   r"(<manifest\b[^>]*>)", r"\1\n" + permission, xml, count=1
