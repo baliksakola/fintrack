@@ -532,6 +532,63 @@ class AppDatabase extends _$AppDatabase {
   Stream<List<FinancialGoal>> watchFinancialGoals() =>
       (select(financialGoals)..orderBy([(g) => OrderingTerm.asc(g.targetDate)])).watch();
 
+  Stream<List<FinanceTransaction>> watchGoalContributions(String goalId) =>
+      (select(financeTransactions)
+        ..where((t) => t.category.equals('goal:$goalId'))
+        ..orderBy([(t) => OrderingTerm.desc(t.occurredAt)])).watch();
+
+  Future<void> addGoalContribution({
+    required String goalId,
+    required String fromAccountId,
+    required String toAccountId,
+    required int amount,
+    String? note,
+  }) async {
+    if (amount <= 0 || fromAccountId == toAccountId) {
+      throw ArgumentError('Nominal dan rekening setoran tidak valid.');
+    }
+    final goal = await (select(financialGoals)
+      ..where((g) => g.id.equals(goalId))).getSingleOrNull();
+    if (goal == null) throw StateError('Target tabungan tidak ditemukan.');
+    if (goal.savedAmount + amount > goal.targetAmount) {
+      throw ArgumentError('Setoran melebihi sisa target tabungan.');
+    }
+    final from = await (select(accounts)..where((a) =>
+      a.id.equals(fromAccountId) & a.archived.equals(false))).getSingleOrNull();
+    final to = await (select(accounts)..where((a) =>
+      a.id.equals(toAccountId) & a.archived.equals(false))).getSingleOrNull();
+    if (from == null || to == null) throw StateError('Rekening tidak ditemukan.');
+    final transactionId = _uuid.v4();
+    final now = DateTime.now();
+    final title = note?.trim().isNotEmpty == true
+        ? 'Setoran \${goal.title}: \${note!.trim()}'
+        : 'Setoran target: \${goal.title}';
+    await transaction(() async {
+      await into(financeTransactions).insert(FinanceTransactionsCompanion.insert(
+        id: transactionId, type: 'transfer', accountId: fromAccountId,
+        amount: amount, title: title, category: Value('goal:$goalId'),
+        occurredAt: now, createdAt: now,
+      ));
+      await into(transfers).insert(TransfersCompanion.insert(
+        id: _uuid.v4(), transactionId: transactionId,
+        fromAccountId: fromAccountId, toAccountId: toAccountId, createdAt: now,
+      ));
+      await into(ledgerEntries).insert(LedgerEntriesCompanion.insert(
+        id: _uuid.v4(), transactionId: transactionId,
+        accountId: fromAccountId, amountDelta: -amount, createdAt: now,
+      ));
+      await into(ledgerEntries).insert(LedgerEntriesCompanion.insert(
+        id: _uuid.v4(), transactionId: transactionId,
+        accountId: toAccountId, amountDelta: amount, createdAt: now,
+      ));
+      await (update(financialGoals)..where((g) => g.id.equals(goalId))).write(
+        FinancialGoalsCompanion(savedAmount: Value(goal.savedAmount + amount)),
+      );
+    });
+  }
+
+
+
   Future<void> saveFinancialGoal({
     String? goalId,
     required String title,
@@ -600,6 +657,7 @@ class AppDatabase extends _$AppDatabase {
     required String toAccountId,
     required int amount,
     required String title,
+    String? category,
   }) async {
     if (amount <= 0 || title.trim().isEmpty || fromAccountId == toAccountId) {
       throw ArgumentError('Data transfer tidak valid.');
@@ -614,7 +672,8 @@ class AppDatabase extends _$AppDatabase {
     await transaction(() async {
       await into(financeTransactions).insert(FinanceTransactionsCompanion.insert(
         id: id, type: 'transfer', accountId: fromAccountId, amount: amount,
-        title: title.trim(), occurredAt: now, createdAt: now,
+        title: title.trim(), category: Value(category),
+        occurredAt: now, createdAt: now,
       ));
       await into(transfers).insert(TransfersCompanion.insert(
         id: _uuid.v4(), transactionId: id, fromAccountId: fromAccountId,
@@ -652,6 +711,20 @@ class AppDatabase extends _$AppDatabase {
     if (account == null) throw StateError('Rekening tidak ditemukan.');
     final delta = current.type == 'income' ? amount : -amount;
     await transaction(() async {
+      final goalId = current.category?.startsWith('goal:') == true
+          ? current.category!.substring(5)
+          : null;
+      if (goalId != null) {
+        final goal = await (select(financialGoals)
+          ..where((g) => g.id.equals(goalId))).getSingleOrNull();
+        if (goal != null) {
+          await (update(financialGoals)..where((g) => g.id.equals(goalId))).write(
+            FinancialGoalsCompanion(
+              savedAmount: Value((goal.savedAmount - current.amount).clamp(0, goal.targetAmount)),
+            ),
+          );
+        }
+      }
       await (delete(ledgerEntries)
         ..where((entry) => entry.transactionId.equals(transactionId))).go();
       await (update(financeTransactions)
