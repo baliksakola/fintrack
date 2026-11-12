@@ -1836,8 +1836,8 @@ class _AccountsList extends StatelessWidget {
                             ),
                           ],
                         ),
-                      FutureBuilder<int>(
-                        future: database.balanceFor(account.id),
+                      StreamBuilder<int>(
+                        stream: database.watchAccountBalance(account.id),
                         builder: (context, balance) => Text(
                           _rupiah.format(balance.data ?? account.openingBalance),
                           maxLines: 1,
