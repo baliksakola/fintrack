@@ -923,6 +923,7 @@ class AppDatabase extends _$AppDatabase {
       await delete(debts).go();
       await delete(budgets).go();
       await delete(bills).go();
+      await delete(financialGoals).go();
       await delete(accounts).go();
 
       for (final row in accountRows) {
