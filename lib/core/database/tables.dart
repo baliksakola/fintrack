@@ -103,3 +103,15 @@ class DebtPayments extends Table {
   @override
   Set<Column<Object>> get primaryKey => {id};
 }
+
+class FinancialGoals extends Table {
+  TextColumn get id => text()();
+  TextColumn get title => text().withLength(min: 1, max: 120)();
+  IntColumn get targetAmount => integer()();
+  IntColumn get savedAmount => integer().withDefault(const Constant(0))();
+  DateTimeColumn get targetDate => dateTime()();
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
