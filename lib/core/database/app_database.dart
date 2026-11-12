@@ -919,7 +919,8 @@ class AppDatabase extends _$AppDatabase {
         'createdAt': row.createdAt.toIso8601String(),
       }).toList(),
     };
-    return const JsonEncoder.withIndent('  ').convert(backup);  });
+    return const JsonEncoder.withIndent('  ').convert(backup);
+  });
 
   Future<void> restoreBackupJson(String source) async {
     final decoded = jsonDecode(source);
