@@ -111,7 +111,7 @@ class FinTrackApp extends StatelessWidget {
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       ),
-      navigationBarTheme: const NavigationBarThemeData(
+      navigationBarTheme: NavigationBarThemeData(
         height: 68,
         elevation: 0,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
