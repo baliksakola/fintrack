@@ -36,6 +36,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     'Ringkasan',
     'Aktivitas',
     'Tagihan & Rencana',
+    'Tagihan Bulanan',
     'Laporan',
     'Lainnya',
   ];
@@ -47,6 +48,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       _OverviewPage(database: db),
       _ActivityPage(database: db),
       _PlanningPage(database: db),
+      _MonthlyBillsPage(database: db),
       _ReportsPage(database: db),
       _MorePage(database: db),
     ];
@@ -86,6 +88,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             icon: Icon(Icons.event_note_outlined),
             selectedIcon: Icon(Icons.event_note),
             label: 'Rencana',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.calendar_month_outlined),
+            selectedIcon: Icon(Icons.calendar_month),
+            label: 'Bulanan',
           ),
           NavigationDestination(
             icon: Icon(Icons.analytics_outlined),
@@ -579,6 +586,112 @@ class _ActivityPage extends StatelessWidget {
   Widget build(BuildContext context) => ListView(
     padding: const EdgeInsets.all(16),
     children: [TransactionHistorySection(database: database)],
+  );
+}
+
+class _MonthlyBillsPage extends StatelessWidget {
+  const _MonthlyBillsPage({required this.database});
+  final AppDatabase database;
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final monthStart = DateTime(now.year, now.month);
+    final monthEnd = DateTime(now.year, now.month + 1);
+    return ListView(padding: const EdgeInsets.all(16), children: [
+      Text('Tagihan rutin bulan ini', style: Theme.of(context).textTheme.titleLarge),
+      Text(DateFormat('MMMM yyyy', 'id_ID').format(now), style: Theme.of(context).textTheme.bodySmall),
+      const SizedBox(height: 10),
+      StreamBuilder<int>(
+        stream: database.watchTotalBalance(),
+        builder: (context, balanceSnapshot) => StreamBuilder<List<Bill>>(
+          stream: database.watchBills(),
+          builder: (context, billSnapshot) {
+            final bills = (billSnapshot.data ?? <Bill>[]).where((b) =>
+              b.isMonthly && !b.isPaid &&
+              !b.dueDate.isBefore(monthStart) && b.dueDate.isBefore(monthEnd)
+            ).toList()..sort((a,b) => a.dueDate.compareTo(b.dueDate));
+            final total = bills.fold<int>(0, (sum,b) => sum+b.amount);
+            final balance = balanceSnapshot.data ?? 0;
+            final afterBills = balance - total;
+            final byCategory = <String,int>{};
+            for (final bill in bills) {
+              byCategory[bill.category] = (byCategory[bill.category] ?? 0) + bill.amount;
+            }
+            final categories = byCategory.entries.toList()..sort((a,b) => b.value.compareTo(a.value));
+            return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('Kondisi saldo setelah tagihan bulanan'),
+                const SizedBox(height: 12),
+                _OverviewLine(label: 'Saldo tersedia saat ini', value: _rupiah.format(balance), strong: true),
+                _OverviewLine(label: 'Total tagihan bulanan belum dibayar', value: _rupiah.format(total), color: Colors.red),
+                const Divider(),
+                _OverviewLine(label: afterBills >= 0 ? 'Perkiraan saldo tersisa' : 'Kekurangan dana', value: _rupiah.format(afterBills.abs()), color: afterBills >= 0 ? Colors.green : Colors.red, strong: true),
+                Text(afterBills >= 0 ? 'Saldo mencukupi untuk membayar semua tagihan rutin bulan ini.' : 'Saldo belum mencukupi. Perlu tambahan dana sebesar ' + _rupiah.format(afterBills.abs()) + '.', style: Theme.of(context).textTheme.bodySmall),
+              ]))),
+              const SizedBox(height: 8),
+              Text('Rincian per kategori', style: Theme.of(context).textTheme.titleMedium),
+              if (categories.isEmpty) const Card(child: Padding(padding: EdgeInsets.all(14), child: Text('Tidak ada tagihan rutin yang belum dibayar bulan ini.')))
+              else ...categories.map((entry) => Card(child: ListTile(title: Text(entry.key), subtitle: Text(bills.where((b) => b.category == entry.key).length.toString() + ' tagihan'), trailing: Text(_rupiah.format(entry.value), style: const TextStyle(fontWeight: FontWeight.w600))))),
+              const SizedBox(height: 8),
+              Text('Daftar tagihan', style: Theme.of(context).textTheme.titleMedium),
+              if (bills.isEmpty) const Text('Semua tagihan rutin bulan ini sudah lunas atau belum ada jadwal.')
+              else ...bills.map((bill) => Card(child: ListTile(
+                leading: const Icon(Icons.event_note),
+                title: Text(bill.title),
+                subtitle: Text(bill.category + ' • Jatuh tempo ' + DateFormat('dd MMM yyyy','id_ID').format(bill.dueDate)),
+                trailing: Text(_rupiah.format(bill.amount), style: const TextStyle(fontWeight: FontWeight.w600)),
+              ))),
+            ]);
+          },
+        ),
+      ),
+    ]);
+  }
+}
+
+class _DebtGroup extends StatelessWidget {
+  const _DebtGroup({required this.title, required this.icon, required this.debts, required this.database, required this.onEdit, required this.onDelete, required this.onPay});
+  final String title;
+  final IconData icon;
+  final List<Debt> debts;
+  final AppDatabase database;
+  final void Function(Debt) onEdit;
+  final void Function(Debt) onDelete;
+  final void Function(Debt, int) onPay;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: ExpansionTile(
+      initiallyExpanded: debts.isNotEmpty,
+      leading: Icon(icon),
+      title: Text(title),
+      subtitle: Text(debts.length.toString() + ' catatan'),
+      children: debts.isEmpty ? [const ListTile(title: Text('Belum ada data.'))] : debts.map((debt) => FutureBuilder<int>(
+        future: database.debtRemaining(debt.id),
+        builder: (context, snapshot) {
+          final remaining = snapshot.data ?? debt.amount;
+          final paid = remaining <= 0;
+          return ListTile(
+            dense: true,
+            title: Text(debt.title),
+            subtitle: Text(debt.partyName + ' • Sisa ' + _rupiah.format(remaining) + (debt.dueDate == null ? '' : ' • ' + DateFormat('dd MMM yy','id_ID').format(debt.dueDate!))),
+            trailing: PopupMenuButton<String>(
+              onSelected: (action) {
+                if (action == 'edit') onEdit(debt);
+                if (action == 'delete') onDelete(debt);
+                if (action == 'pay' && !paid) onPay(debt, remaining);
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                const PopupMenuItem(value: 'delete', child: Text('Hapus')),
+                if (!paid) const PopupMenuItem(value: 'pay', child: Text('Bayar')),
+              ],
+            ),
+          );
+        },
+      )).toList(),
+    ),
   );
 }
 
@@ -1761,46 +1874,13 @@ class _DebtSectionState extends State<DebtSection> {
               ),
             );
           }
-          return Column(
-            children: items.map((debt) => FutureBuilder<int>(
-              future: widget.database.debtRemaining(debt.id),
-              builder: (context, balance) {
-                final remaining = balance.data ?? debt.amount;
-                final paid = remaining == 0;
-                final overdue = debt.dueDate != null &&
-                    DateTime(debt.dueDate!.year, debt.dueDate!.month, debt.dueDate!.day)
-                        .isBefore(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)) &&
-                    !paid;
-                return Card(
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      child: Icon(debt.direction == 'payable' ? Icons.call_made : Icons.call_received),
-                    ),
-                    title: Text(debt.title),
-                    subtitle: Text(
-                      '${debt.partyName} • ${debt.direction == 'payable' ? 'Utang' : 'Piutang'}'
-                      '${debt.dueDate == null ? '' : ' • Jatuh tempo ${DateFormat('dd MMM yyyy', 'id_ID').format(debt.dueDate!)}'}'
-                      '${overdue ? ' • TERLAMBAT' : ''}'
-                      '\nTotal ${_rupiah.format(debt.amount)} • Sisa ${_rupiah.format(remaining)}',
-                    ),
-                    isThreeLine: true,
-                    trailing: PopupMenuButton<String>(
-                      onSelected: (action) {
-                        if (action == 'edit') _editDebt(debt);
-                        if (action == 'delete') _deleteDebt(debt);
-                        if (action == 'pay' && !paid) _payDebt(debt, remaining);
-                      },
-                      itemBuilder: (context) => [
-                        const PopupMenuItem(value: 'edit', child: ListTile(dense: true, leading: Icon(Icons.edit_outlined), title: Text('Edit'))),
-                        const PopupMenuItem(value: 'delete', child: ListTile(dense: true, leading: Icon(Icons.delete_outline), title: Text('Hapus'))),
-                        if (!paid) const PopupMenuItem(value: 'pay', child: ListTile(dense: true, leading: Icon(Icons.payments_outlined), title: Text('Bayar'))),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            )).toList(),
-          );
+          final payable = items.where((d) => d.direction == 'payable').toList();
+          final receivable = items.where((d) => d.direction == 'receivable').toList();
+          return Column(children: [
+            _DebtGroup(title: 'Pinjaman / Utang', icon: Icons.call_made, debts: payable, database: widget.database, onEdit: _editDebt, onDelete: _deleteDebt, onPay: _payDebt),
+            const SizedBox(height: 8),
+            _DebtGroup(title: 'Piutang', icon: Icons.call_received, debts: receivable, database: widget.database, onEdit: _editDebt, onDelete: _deleteDebt, onPay: _payDebt),
+          ]);
         },
       ),
     ],
