@@ -13,7 +13,7 @@ part 'app_database.g.dart';
 final databaseProvider = Provider<AppDatabase>((ref) =>
     throw UnimplementedError('Database provider not initialized'));
 
-@DriftDatabase(tables: [Accounts, FinanceTransactions, LedgerEntries, Transfers, Budgets, Bills, Debts, DebtPayments, FinancialGoals])
+@DriftDatabase(tables: [Accounts, FinanceTransactions, LedgerEntries, Transfers, Budgets, Bills, Debts, DebtPayments, FinancialGoals, RecurringTransactions])
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.executor);
 
@@ -26,7 +26,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -381,6 +381,113 @@ class AppDatabase extends _$AppDatabase {
   }) => _addTransaction('expense', accountId, amount, title, category);
 
 
+
+  Stream<List<RecurringTransaction>> watchRecurringTransactions() =>
+      (select(recurringTransactions)
+        ..orderBy([(r) => OrderingTerm.asc(r.nextDueDate)])).watch();
+
+  Future<void> addRecurringTransaction({
+    required String type,
+    required String accountId,
+    required int amount,
+    required String title,
+    String? category,
+    required DateTime firstDueDate,
+    DateTime? endDate,
+  }) async {
+    if (!['income', 'expense'].contains(type) || amount <= 0 || title.trim().isEmpty) {
+      throw ArgumentError('Data transaksi berulang tidak valid.');
+    }
+    final account = await (select(accounts)
+      ..where((a) => a.id.equals(accountId) & a.archived.equals(false)))
+      .getSingleOrNull();
+    if (account == null) throw StateError('Rekening tidak ditemukan.');
+    final first = DateTime(firstDueDate.year, firstDueDate.month, firstDueDate.day);
+    final end = endDate == null ? null : DateTime(endDate.year, endDate.month, endDate.day);
+    if (end != null && end.isBefore(first)) {
+      throw ArgumentError('Tanggal akhir tidak boleh sebelum tanggal mulai.');
+    }
+    await into(recurringTransactions).insert(RecurringTransactionsCompanion.insert(
+      id: _uuid.v4(),
+      type: type,
+      accountId: accountId,
+      amount: amount,
+      title: title.trim(),
+      category: Value(category?.trim().isEmpty == true ? null : category?.trim()),
+      nextDueDate: first,
+      dayOfMonth: first.day,
+      endDate: Value(end),
+      createdAt: DateTime.now(),
+    ));
+  }
+
+  Future<void> setRecurringTransactionActive(String id, bool active) async {
+    final item = await (select(recurringTransactions)
+      ..where((r) => r.id.equals(id))).getSingleOrNull();
+    if (item == null) throw StateError('Jadwal transaksi tidak ditemukan.');
+    await (update(recurringTransactions)..where((r) => r.id.equals(id)))
+      .write(RecurringTransactionsCompanion(isActive: Value(active)));
+  }
+
+  Future<void> deleteRecurringTransaction(String id) =>
+      (delete(recurringTransactions)..where((r) => r.id.equals(id))).go();
+
+  Future<int> processDueRecurringTransactions({DateTime? throughDate}) async {
+    final today = throughDate == null
+        ? DateTime.now()
+        : DateTime(throughDate.year, throughDate.month, throughDate.day);
+    final schedules = await (select(recurringTransactions)
+      ..where((r) => r.isActive.equals(true) & r.nextDueDate.isSmallerOrEqualValue(today))
+      ..orderBy([(r) => OrderingTerm.asc(r.nextDueDate)])).get();
+    var created = 0;
+    for (final schedule in schedules) {
+      final account = await (select(accounts)..where((a) =>
+        a.id.equals(schedule.accountId) & a.archived.equals(false))).getSingleOrNull();
+      if (account == null) {
+        throw StateError('Rekening untuk jadwal "${schedule.title}" tidak tersedia atau diarsipkan.');
+      }
+      await transaction(() async {
+        var due = schedule.nextDueDate;
+        while (!due.isAfter(today) &&
+            (schedule.endDate == null || !due.isAfter(schedule.endDate!))) {
+          final transactionId = _uuid.v4();
+          final delta = schedule.type == 'income' ? schedule.amount : -schedule.amount;
+          await into(financeTransactions).insert(FinanceTransactionsCompanion.insert(
+            id: transactionId,
+            type: schedule.type,
+            accountId: schedule.accountId,
+            amount: schedule.amount,
+            title: schedule.title,
+            category: Value(schedule.category),
+            occurredAt: due,
+            createdAt: DateTime.now(),
+          ));
+          await into(ledgerEntries).insert(LedgerEntriesCompanion.insert(
+            id: _uuid.v4(),
+            transactionId: transactionId,
+            accountId: schedule.accountId,
+            amountDelta: delta,
+            createdAt: DateTime.now(),
+          ));
+          created++;
+          final nextMonth = DateTime(due.year, due.month + 1, 1);
+          final lastDay = DateTime(nextMonth.year, nextMonth.month + 1, 0).day;
+          due = DateTime(nextMonth.year, nextMonth.month,
+              schedule.dayOfMonth > lastDay ? lastDay : schedule.dayOfMonth);
+        }
+        final finished = schedule.endDate != null && due.isAfter(schedule.endDate!);
+        await (update(recurringTransactions)
+          ..where((r) => r.id.equals(schedule.id))).write(
+            RecurringTransactionsCompanion(
+              nextDueDate: Value(due),
+              isActive: Value(!finished),
+            ),
+          );
+      });
+    }
+    return created;
+  }
+
   Stream<List<FinancialGoal>> watchFinancialGoals() =>
       (select(financialGoals)..orderBy([(g) => OrderingTerm.asc(g.targetDate)])).watch();
 
@@ -598,7 +705,7 @@ class AppDatabase extends _$AppDatabase {
         'transactionId': row.transactionId, 'amount': row.amount,
         'paidAt': row.paidAt.toIso8601String(),
       }).toList(),
-      'bills': (await select(bills).get()).map((row) => {
+      'recurringTransactions': (await select(recurringTransactions).get()).map((row) => {\n        'id': row.id, 'type': row.type, 'accountId': row.accountId,\n        'amount': row.amount, 'title': row.title, 'category': row.category,\n        'nextDueDate': row.nextDueDate.toIso8601String(),\n        'dayOfMonth': row.dayOfMonth, 'endDate': row.endDate?.toIso8601String(),\n        'isActive': row.isActive, 'createdAt': row.createdAt.toIso8601String(),\n      }).toList(),\n      'bills': (await select(bills).get()).map((row) => {
         'id': row.id, 'title': row.title, 'category': row.category,
         'amount': row.amount, 'dueDate': row.dueDate.toIso8601String(),
         'isPaid': row.isPaid, 'isMonthly': row.isMonthly,
@@ -635,7 +742,7 @@ class AppDatabase extends _$AppDatabase {
     final billRows = rows('bills');
     final debtRows = decoded['debts'] is List ? rows('debts') : <Map<String, dynamic>>[];
     final debtPaymentRows = decoded['debtPayments'] is List ? rows('debtPayments') : <Map<String, dynamic>>[];
-    final goalRows = decoded['financialGoals'] is List ? rows('financialGoals') : <Map<String, dynamic>>[];
+    final goalRows = decoded['financialGoals'] is List ? rows('financialGoals') : <Map<String, dynamic>>[];\n    final recurringRows = decoded['recurringTransactions'] is List ? rows('recurringTransactions') : <Map<String, dynamic>>[];
 
     DateTime date(Map<String, dynamic> row, String key) {
       final value = row[key];
@@ -662,7 +769,7 @@ class AppDatabase extends _$AppDatabase {
     }
 
     await transaction(() async {
-      await delete(debtPayments).go();
+      await delete(recurringTransactions).go();\n      await delete(debtPayments).go();
       await delete(ledgerEntries).go();
       await delete(transfers).go();
       await delete(financeTransactions).go();
@@ -737,7 +844,7 @@ class AppDatabase extends _$AppDatabase {
           targetDate: date(row, 'targetDate'), createdAt: date(row, 'createdAt'),
         ));
       }
-      for (final row in debtPaymentRows) {
+      for (final row in recurringRows) {\n        final category = row['category'];\n        final endDate = row['endDate'];\n        await into(recurringTransactions).insert(RecurringTransactionsCompanion.insert(\n          id: string(row, 'id'), type: string(row, 'type'),\n          accountId: string(row, 'accountId'), amount: integer(row, 'amount'),\n          title: string(row, 'title'), category: Value(category is String ? category : null),\n          nextDueDate: date(row, 'nextDueDate'), dayOfMonth: integer(row, 'dayOfMonth'),\n          endDate: Value(endDate is String ? DateTime.parse(endDate) : null),\n          isActive: Value(boolean(row, 'isActive')), createdAt: date(row, 'createdAt'),\n        ));\n      }\n      for (final row in debtPaymentRows) {
         await into(debtPayments).insert(DebtPaymentsCompanion.insert(
           id: string(row, 'id'),
           debtId: string(row, 'debtId'),
