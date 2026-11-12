@@ -1481,7 +1481,15 @@ class RecurringTransactionsSection extends StatelessWidget {
       ]),
       Card(child: Column(children: [
         ListTile(
-          leading: const Icon(Icons.autorenew),
+          leading: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: const Color(0xFF3978D5).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: const Icon(Icons.autorenew, color: Color(0xFF3978D5)),
+          ),
           title: const Text('Proses jadwal jatuh tempo'),
           subtitle: const Text('Membuat transaksi bulanan yang belum dicatat ke saldo.'),
           trailing: const Icon(Icons.play_arrow),
@@ -1495,11 +1503,23 @@ class RecurringTransactionsSection extends StatelessWidget {
             if (items.isEmpty) {
               return const ListTile(title: Text('Belum ada jadwal transaksi.'));
             }
-            return Column(children: items.map((item) => ListTile(
-              leading: Icon(item.type == 'income'
-                  ? Icons.add_circle_outline
-                  : Icons.remove_circle_outline),
-              title: Text(item.title),
+            return Column(children: items.map((item) {
+              final accent = item.type == 'income'
+                  ? const Color(0xFF15966F)
+                  : const Color(0xFFE05B62);
+              return ListTile(
+              leading: CircleAvatar(
+                radius: 19,
+                backgroundColor: accent.withValues(alpha: 0.12),
+                child: Icon(
+                  item.type == 'income'
+                      ? Icons.south_west_rounded
+                      : Icons.north_east_rounded,
+                  color: accent,
+                  size: 19,
+                ),
+              ),
+              title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.w600)),
               subtitle: Text(
                 '${item.type == 'income' ? 'Pemasukan' : 'Pengeluaran'} • '
                 '${_rupiah.format(item.amount)} • Berikutnya: '
@@ -1535,7 +1555,8 @@ class RecurringTransactionsSection extends StatelessWidget {
                   const PopupMenuItem(value: 'delete', child: Text('Hapus jadwal')),
                 ],
               ),
-            )).toList());
+            );
+            }).toList());
           },
         ),
       ])),
@@ -3812,8 +3833,33 @@ class _FinanceReportsSectionState extends State<FinanceReportsSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Laporan keuangan', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 8),
+        Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: const Color(0xFF3978D5).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: const Icon(Icons.analytics_outlined,
+                color: Color(0xFF3978D5)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Laporan keuangan',
+                    style: Theme.of(context).textTheme.titleLarge),
+                  Text('Ringkasan dan ekspor data transaksi',
+                    style: Theme.of(context).textTheme.bodySmall),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
         DropdownButtonFormField<String>(
           initialValue: _period,
           decoration: const InputDecoration(
