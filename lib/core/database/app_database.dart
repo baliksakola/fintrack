@@ -705,7 +705,14 @@ class AppDatabase extends _$AppDatabase {
         'transactionId': row.transactionId, 'amount': row.amount,
         'paidAt': row.paidAt.toIso8601String(),
       }).toList(),
-      'recurringTransactions': (await select(recurringTransactions).get()).map((row) => {\n        'id': row.id, 'type': row.type, 'accountId': row.accountId,\n        'amount': row.amount, 'title': row.title, 'category': row.category,\n        'nextDueDate': row.nextDueDate.toIso8601String(),\n        'dayOfMonth': row.dayOfMonth, 'endDate': row.endDate?.toIso8601String(),\n        'isActive': row.isActive, 'createdAt': row.createdAt.toIso8601String(),\n      }).toList(),\n      'bills': (await select(bills).get()).map((row) => {
+      'recurringTransactions': (await select(recurringTransactions).get()).map((row) => {
+        'id': row.id, 'type': row.type, 'accountId': row.accountId,
+        'amount': row.amount, 'title': row.title, 'category': row.category,
+        'nextDueDate': row.nextDueDate.toIso8601String(),
+        'dayOfMonth': row.dayOfMonth, 'endDate': row.endDate?.toIso8601String(),
+        'isActive': row.isActive, 'createdAt': row.createdAt.toIso8601String(),
+      }).toList(),
+      'bills': (await select(bills).get()).map((row) => {
         'id': row.id, 'title': row.title, 'category': row.category,
         'amount': row.amount, 'dueDate': row.dueDate.toIso8601String(),
         'isPaid': row.isPaid, 'isMonthly': row.isMonthly,
