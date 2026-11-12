@@ -3199,26 +3199,30 @@ class _BudgetSectionState extends State<BudgetSection> {
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: Text(existing == null ? 'Tambah anggaran' : 'Ubah anggaran'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                initialValue: category,
-                decoration: const InputDecoration(labelText: 'Kategori'),
-                items: _expenseCategories.map((value) => DropdownMenuItem(
-                  value: value,
-                  child: Text(value),
-                )).toList(),
-                onChanged: existing == null
-                    ? (value) => setDialogState(() => category = value ?? category)
-                    : null,
-              ),
-              TextField(
-                controller: amount,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Batas per bulan (Rp)'),
-              ),
-            ],
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: category,
+                  decoration: const InputDecoration(labelText: 'Kategori'),
+                  items: _expenseCategories.map((value) => DropdownMenuItem(
+                    value: value,
+                    child: Text(value),
+                  )).toList(),
+                  onChanged: existing == null
+                      ? (value) => setDialogState(() => category = value ?? category)
+                      : null,
+                ),
+                TextField(
+                  controller: amount,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Batas per bulan (Rp)',
+                  ),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -3230,6 +3234,14 @@ class _BudgetSectionState extends State<BudgetSection> {
                 final limit = int.tryParse(
                   amount.text.replaceAll('.', '').replaceAll(',', ''),
                 ) ?? 0;
+                if (limit <= 0) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(
+                      content: Text('Batas anggaran harus lebih dari Rp0.'),
+                    ),
+                  );
+                  return;
+                }
                 try {
                   await widget.database.saveBudget(
                     category: category,
