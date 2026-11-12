@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -301,4 +302,30 @@ void main() {
     expect(await database.watchTransactions().first, hasLength(1));
   });
 
+
+  test('malformed backup data does not replace existing accounts', () async {
+    await database.addAccount('Data lama', 'cash', 125000);
+    final backup = jsonDecode(await database.exportBackupJson())
+        as Map<String, dynamic>;
+    backup['accounts'] = [
+      {
+        'id': 'invalid-account',
+        'name': 'Data rusak',
+        'type': 'cash',
+        'openingBalance': 'bukan angka',
+        'archived': false,
+        'createdAt': DateTime(2026, 11, 12).toIso8601String(),
+      },
+    ];
+
+    await expectLater(
+      database.restoreBackupJson(jsonEncode(backup)),
+      throwsFormatException,
+    );
+
+    final accounts = await database.watchAccounts().first;
+    expect(accounts, hasLength(1));
+    expect(accounts.single.name, 'Data lama');
+    expect(await database.watchTotalBalance().first, 125000);
+  });
 }
