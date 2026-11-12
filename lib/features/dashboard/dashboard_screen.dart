@@ -70,7 +70,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           NavigationDestination(
             icon: Icon(Icons.space_dashboard_outlined),
             selectedIcon: Icon(Icons.space_dashboard),
-            label: 'Home',
+            label: 'Ringkasan',
           ),
           NavigationDestination(
             icon: Icon(Icons.receipt_long_outlined),
@@ -104,7 +104,7 @@ class _OverviewPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListView(
-    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+    padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
     children: [
       StreamBuilder<int>(
         stream: database.watchTotalBalance(),
@@ -147,7 +147,7 @@ class _OverviewPage extends StatelessWidget {
           );
         },
       ),
-      const SizedBox(height: 16),
+      const SizedBox(height: 20),
       Text('Aksi cepat', style: Theme.of(context).textTheme.titleMedium),
       const SizedBox(height: 8),
       Row(
@@ -1411,23 +1411,44 @@ class _QuickAction extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Card(
-    child: InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
-        child: Column(
-          children: [
-            Icon(icon, size: 24),
-            const SizedBox(height: 6),
-            Text(label, textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.labelMedium),
-          ],
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: colors.primaryContainer,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, size: 22, color: colors.onPrimaryContainer),
+              ),
+              const SizedBox(height: 9),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _AccountsList extends StatelessWidget {
