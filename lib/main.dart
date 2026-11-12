@@ -32,8 +32,21 @@ class FinTrackApp extends StatelessWidget {
     themeMode: ThemeMode.system,
     theme: ThemeData(
       useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2563EB)),
-      scaffoldBackgroundColor: const Color(0xFFF6F8FC),
+      visualDensity: VisualDensity.standard,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: const Color(0xFF2563EB),
+        surface: const Color(0xFFFDFEFF),
+      ),
+      scaffoldBackgroundColor: const Color(0xFFF5F7FB),
+      dividerTheme: const DividerThemeData(
+        space: 1,
+        thickness: 1,
+        color: Color(0xFFE8EDF4),
+      ),
+      listTileTheme: const ListTileThemeData(
+        minVerticalPadding: 8,
+        horizontalTitleGap: 12,
+      ),
       appBarTheme: const AppBarTheme(
         centerTitle: false,
         elevation: 0,
@@ -72,7 +85,18 @@ class FinTrackApp extends StatelessWidget {
     ),
     darkTheme: ThemeData(
       useMaterial3: true,
+      visualDensity: VisualDensity.standard,
       brightness: Brightness.dark,
+      scaffoldBackgroundColor: const Color(0xFF10141C),
+      dividerTheme: DividerThemeData(
+        space: 1,
+        thickness: 1,
+        color: Colors.white.withValues(alpha: 0.08),
+      ),
+      listTileTheme: const ListTileThemeData(
+        minVerticalPadding: 8,
+        horizontalTitleGap: 12,
+      ),
       colorScheme: ColorScheme.fromSeed(
         seedColor: const Color(0xFF60A5FA),
         brightness: Brightness.dark,
