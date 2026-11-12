@@ -13,7 +13,7 @@ part 'app_database.g.dart';
 final databaseProvider = Provider<AppDatabase>((ref) =>
     throw UnimplementedError('Database provider not initialized'));
 
-@DriftDatabase(tables: [Accounts, FinanceTransactions, LedgerEntries, Transfers, Budgets, Bills, Debts, DebtPayments])
+@DriftDatabase(tables: [Accounts, FinanceTransactions, LedgerEntries, Transfers, Budgets, Bills, Debts, DebtPayments, FinancialGoals])
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.executor);
 
@@ -26,7 +26,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -47,6 +47,9 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 5) {
         await m.addColumn(bills, bills.recurrenceEndDate);
+      }
+      if (from < 6) {
+        await m.createTable(financialGoals);
       }
     },
     beforeOpen: (details) async {
@@ -377,6 +380,47 @@ class AppDatabase extends _$AppDatabase {
     required String title, String? category,
   }) => _addTransaction('expense', accountId, amount, title, category);
 
+
+  Stream<List<FinancialGoal>> watchFinancialGoals() =>
+      (select(financialGoals)..orderBy([(g) => OrderingTerm.asc(g.targetDate)])).watch();
+
+  Future<void> saveFinancialGoal({
+    String? goalId,
+    required String title,
+    required int targetAmount,
+    required int savedAmount,
+    required DateTime targetDate,
+  }) async {
+    if (title.trim().isEmpty || targetAmount <= 0 || savedAmount < 0 || savedAmount > targetAmount) {
+      throw ArgumentError('Data target tabungan tidak valid.');
+    }
+    final normalizedDate = DateTime(targetDate.year, targetDate.month, targetDate.day);
+    if (goalId == null) {
+      await into(financialGoals).insert(FinancialGoalsCompanion.insert(
+        id: _uuid.v4(),
+        title: title.trim(),
+        targetAmount: targetAmount,
+        savedAmount: Value(savedAmount),
+        targetDate: normalizedDate,
+        createdAt: DateTime.now(),
+      ));
+    } else {
+      final existing = await (select(financialGoals)..where((g) => g.id.equals(goalId))).getSingleOrNull();
+      if (existing == null) throw StateError('Target tabungan tidak ditemukan.');
+      await (update(financialGoals)..where((g) => g.id.equals(goalId))).write(
+        FinancialGoalsCompanion(
+          title: Value(title.trim()),
+          targetAmount: Value(targetAmount),
+          savedAmount: Value(savedAmount),
+          targetDate: Value(normalizedDate),
+        ),
+      );
+    }
+  }
+
+  Future<void> deleteFinancialGoal(String goalId) =>
+      (delete(financialGoals)..where((g) => g.id.equals(goalId))).go();
+
   Future<void> _addTransaction(
     String type, String accountId, int amount, String title, String? category,
   ) async {
@@ -544,6 +588,11 @@ class AppDatabase extends _$AppDatabase {
         'amount': row.amount, 'dueDate': row.dueDate?.toIso8601String(),
         'notes': row.notes, 'createdAt': row.createdAt.toIso8601String(),
       }).toList(),
+      'financialGoals': (await select(financialGoals).get()).map((row) => {
+        'id': row.id, 'title': row.title, 'targetAmount': row.targetAmount,
+        'savedAmount': row.savedAmount, 'targetDate': row.targetDate.toIso8601String(),
+        'createdAt': row.createdAt.toIso8601String(),
+      }).toList(),
       'debtPayments': (await select(debtPayments).get()).map((row) => {
         'id': row.id, 'debtId': row.debtId,
         'transactionId': row.transactionId, 'amount': row.amount,
@@ -586,6 +635,7 @@ class AppDatabase extends _$AppDatabase {
     final billRows = rows('bills');
     final debtRows = decoded['debts'] is List ? rows('debts') : <Map<String, dynamic>>[];
     final debtPaymentRows = decoded['debtPayments'] is List ? rows('debtPayments') : <Map<String, dynamic>>[];
+    final goalRows = decoded['financialGoals'] is List ? rows('financialGoals') : <Map<String, dynamic>>[];
 
     DateTime date(Map<String, dynamic> row, String key) {
       final value = row[key];
@@ -677,6 +727,14 @@ class AppDatabase extends _$AppDatabase {
           dueDate: Value(dueDate is String ? DateTime.parse(dueDate) : null),
           notes: Value(notes is String ? notes : null),
           createdAt: date(row, 'createdAt'),
+        ));
+      }
+      for (final row in goalRows) {
+        await into(financialGoals).insert(FinancialGoalsCompanion.insert(
+          id: string(row, 'id'), title: string(row, 'title'),
+          targetAmount: integer(row, 'targetAmount'),
+          savedAmount: Value(integer(row, 'savedAmount')),
+          targetDate: date(row, 'targetDate'), createdAt: date(row, 'createdAt'),
         ));
       }
       for (final row in debtPaymentRows) {
