@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fintrack/core/database/app_database.dart';
@@ -104,6 +105,30 @@ void main() {
     );
     expect((await db.watchFinancialGoals().first).single.savedAmount, 75000);
     expect(await db.balanceFor(accounts.first.id), 500000);
+  });
+
+  test('all-account query retains archived accounts for historical reports', () async {
+    await db.addAccount('Aktif', 'Bank', 100000);
+    await db.addAccount('Arsip', 'Bank', 50000);
+    final accounts = await db.getAllAccounts();
+    final archived = accounts.singleWhere((account) => account.name == 'Arsip');
+
+    await (db.update(db.accounts)
+      ..where((account) => account.id.equals(archived.id)))
+      .write(const AccountsCompanion(archived: Value(true)));
+
+    expect(
+      (await db.watchAccounts().first).map((account) => account.name),
+      contains('Aktif'),
+    );
+    expect(
+      (await db.watchAccounts().first).map((account) => account.name),
+      isNot(contains('Arsip')),
+    );
+    expect(
+      (await db.getAllAccounts()).map((account) => account.name),
+      containsAll(['Aktif', 'Arsip']),
+    );
   });
 
   test('income and expense update account balance', () async {
