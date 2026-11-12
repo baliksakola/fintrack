@@ -909,12 +909,12 @@ class _FinancialGoalsSectionState extends State<FinancialGoalsSection> {
     var fromId=accounts.first.id;
     var toId=accounts[1].id;
     final ok=await showDialog<bool>(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,setDialog)=>AlertDialog(
-      title:Text('Setor ke \${goal.title}'),
+      title:Text('Setor ke ${goal.title}'),
       content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
-        Text('Sisa target: \${_rupiah.format(goal.targetAmount-goal.savedAmount)}'),
+        Text('Sisa target: ${_rupiah.format(goal.targetAmount-goal.savedAmount)}'),
         TextField(controller:amount,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Nominal setoran (Rp)')),
-        DropdownButtonFormField<String>(value:fromId,decoration:const InputDecoration(labelText:'Rekening asal'),items:accounts.map((a)=>DropdownMenuItem(value:a.id,child:Text(a.name))).toList(),onChanged:(v){if(v!=null)setDialog(()=>fromId=v);}),
-        DropdownButtonFormField<String>(value:toId,decoration:const InputDecoration(labelText:'Rekening tujuan / tabungan'),items:accounts.map((a)=>DropdownMenuItem(value:a.id,child:Text(a.name))).toList(),onChanged:(v){if(v!=null)setDialog(()=>toId=v);}),
+        DropdownButtonFormField<String>(initialValue:fromId,decoration:const InputDecoration(labelText:'Rekening asal'),items:accounts.map((a)=>DropdownMenuItem(value:a.id,child:Text(a.name))).toList(),onChanged:(v){if(v!=null)setDialog(()=>fromId=v);}),
+        DropdownButtonFormField<String>(initialValue:toId,decoration:const InputDecoration(labelText:'Rekening tujuan / tabungan'),items:accounts.map((a)=>DropdownMenuItem(value:a.id,child:Text(a.name))).toList(),onChanged:(v){if(v!=null)setDialog(()=>toId=v);}),
         TextField(controller:note,decoration:const InputDecoration(labelText:'Catatan (opsional)')),
         const SizedBox(height:6),
         Text('Saldo rekening asal berkurang dan rekening tujuan bertambah. Transfer tidak dihitung sebagai pengeluaran.',style:Theme.of(ctx).textTheme.bodySmall),
@@ -935,7 +935,7 @@ class _FinancialGoalsSectionState extends State<FinancialGoalsSection> {
   }
 
   Future<void> _delete(FinancialGoal goal)async{
-    final ok=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(title:const Text('Hapus target?'),content:Text('Target "\${goal.title}" akan dihapus. Riwayat transfer yang sudah terjadi tetap tersimpan.'),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Batal')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Hapus'))]));
+    final ok=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(title:const Text('Hapus target?'),content:Text('Target "${goal.title}" akan dihapus. Riwayat transfer yang sudah terjadi tetap tersimpan.'),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Batal')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Hapus'))]));
     if(ok==true)await widget.database.deleteFinancialGoal(goal.id);
   }
 
@@ -955,11 +955,11 @@ class _FinancialGoalsSectionState extends State<FinancialGoalsSection> {
             Expanded(child:Text(goal.title,style:const TextStyle(fontWeight:FontWeight.w600))),
             PopupMenuButton<String>(onSelected:(v){if(v=='edit')_edit(goal:goal);if(v=='delete')_delete(goal);},itemBuilder:(_)=>const [PopupMenuItem(value:'edit',child:Text('Edit')),PopupMenuItem(value:'delete',child:Text('Hapus'))]),
           ]),
-          Text('\${_rupiah.format(goal.savedAmount)} dari \${_rupiah.format(goal.targetAmount)}'),
+          Text('${_rupiah.format(goal.savedAmount)} dari ${_rupiah.format(goal.targetAmount)}'),
           const SizedBox(height:8),LinearProgressIndicator(value:progress),
           _OverviewLine(label:'Sisa target',value:_rupiah.format(remaining)),
           _OverviewLine(label:'Perlu ditabung per bulan',value:_rupiah.format(monthly)),
-          Text('Target \${DateFormat('dd MMM yyyy','id_ID').format(goal.targetDate)} • \${(progress*100).round()}%',style:Theme.of(context).textTheme.bodySmall),
+          Text('Target ${DateFormat('dd MMM yyyy','id_ID').format(goal.targetDate)} • ${(progress*100).round()}%',style:Theme.of(context).textTheme.bodySmall),
           const SizedBox(height:8),
           if(remaining>0) Align(alignment:Alignment.centerRight,child:FilledButton.tonalIcon(onPressed:()=>_contribute(goal),icon:const Icon(Icons.savings_outlined),label:const Text('Setor'))),
           StreamBuilder<List<FinanceTransaction>>(stream:widget.database.watchGoalContributions(goal.id),builder:(context,history){
@@ -971,7 +971,7 @@ class _FinancialGoalsSectionState extends State<FinancialGoalsSection> {
                 dense:true,contentPadding:EdgeInsets.zero,
                 leading:const Icon(Icons.swap_horiz),
                 title:Text(_rupiah.format(item.amount)),
-                subtitle:Text('\${DateFormat('dd MMM yyyy','id_ID').format(item.occurredAt)} • \${item.title}'),
+                subtitle:Text('${DateFormat('dd MMM yyyy','id_ID').format(item.occurredAt)} • ${item.title}'),
               )),
             ]);
           }),
