@@ -576,23 +576,27 @@ class AppDatabase extends _$AppDatabase {
     if (amount <= 0 || fromAccountId == toAccountId) {
       throw ArgumentError('Nominal dan rekening setoran tidak valid.');
     }
-    final goal = await (select(financialGoals)
-      ..where((g) => g.id.equals(goalId))).getSingleOrNull();
-    if (goal == null) throw StateError('Target tabungan tidak ditemukan.');
-    if (goal.savedAmount + amount > goal.targetAmount) {
-      throw ArgumentError('Setoran melebihi sisa target tabungan.');
-    }
-    final from = await (select(accounts)..where((a) =>
-      a.id.equals(fromAccountId) & a.archived.equals(false))).getSingleOrNull();
-    final to = await (select(accounts)..where((a) =>
-      a.id.equals(toAccountId) & a.archived.equals(false))).getSingleOrNull();
-    if (from == null || to == null) throw StateError('Rekening tidak ditemukan.');
-    final transactionId = _uuid.v4();
-    final now = DateTime.now();
-    final title = note?.trim().isNotEmpty == true
-        ? 'Setoran ${goal.title}: ${note!.trim()}'
-        : 'Setoran target: ${goal.title}';
+
     await transaction(() async {
+      // Re-read the goal and calculate its remaining amount within the
+      // transaction so simultaneous contributions cannot exceed the target.
+      final goal = await (select(financialGoals)
+        ..where((g) => g.id.equals(goalId))).getSingleOrNull();
+      if (goal == null) throw StateError('Target tabungan tidak ditemukan.');
+      if (goal.savedAmount + amount > goal.targetAmount) {
+        throw ArgumentError('Setoran melebihi sisa target tabungan.');
+      }
+      final from = await (select(accounts)..where((a) =>
+        a.id.equals(fromAccountId) & a.archived.equals(false))).getSingleOrNull();
+      final to = await (select(accounts)..where((a) =>
+        a.id.equals(toAccountId) & a.archived.equals(false))).getSingleOrNull();
+      if (from == null || to == null) throw StateError('Rekening tidak ditemukan.');
+
+      final transactionId = _uuid.v4();
+      final now = DateTime.now();
+      final title = note?.trim().isNotEmpty == true
+          ? 'Setoran ${goal.title}: ${note!.trim()}'
+          : 'Setoran target: ${goal.title}';
       await into(financeTransactions).insert(FinanceTransactionsCompanion.insert(
         id: transactionId, type: 'transfer', accountId: fromAccountId,
         amount: amount, title: title, category: Value('goal:$goalId'),
@@ -615,7 +619,6 @@ class AppDatabase extends _$AppDatabase {
       );
     });
   }
-
 
 
   Future<void> saveFinancialGoal({
@@ -652,8 +655,19 @@ class AppDatabase extends _$AppDatabase {
     }
   }
 
-  Future<void> deleteFinancialGoal(String goalId) =>
-      (delete(financialGoals)..where((g) => g.id.equals(goalId))).go();
+  Future<void> deleteFinancialGoal(String goalId) async {
+    final goal = await (select(financialGoals)
+      ..where((g) => g.id.equals(goalId))).getSingleOrNull();
+    if (goal == null) throw StateError('Target tabungan tidak ditemukan.');
+    final contributions = await (select(financeTransactions)
+      ..where((t) => t.category.equals('goal:$goalId'))).get();
+    if (contributions.isNotEmpty) {
+      throw StateError(
+        'Target masih memiliki riwayat setoran. Hapus atau sesuaikan riwayat setoran terlebih dahulu.',
+      );
+    }
+    await (delete(financialGoals)..where((g) => g.id.equals(goalId))).go();
+  }
 
   Future<void> _addTransaction(
     String type, String accountId, int amount, String title, String? category,
