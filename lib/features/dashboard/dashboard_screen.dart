@@ -1080,13 +1080,50 @@ class _FinancialGoalsSectionState extends State<FinancialGoalsSection> {
         final months=(goal.targetDate.year-DateTime.now().year)*12+goal.targetDate.month-DateTime.now().month;
         final monthly=remaining<=0?0:(months<=0?remaining:(remaining/months).ceil());
         final progress=(goal.savedAmount/goal.targetAmount).clamp(0.0,1.0);
-        return Card(child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        final goalColor = progress >= 1
+            ? const Color(0xFF15966F)
+            : const Color(0xFF8B5CC7);
+        return Card(
+          clipBehavior: Clip.antiAlias,
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  goalColor.withValues(alpha: 0.09),
+                  Theme.of(context).colorScheme.surface,
+                ],
+                begin: Alignment.topRight,
+                end: Alignment.bottomLeft,
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children:[
-            Expanded(child:Text(goal.title,style:const TextStyle(fontWeight:FontWeight.w600))),
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: goalColor.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(Icons.savings_outlined, color: goalColor),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child:Text(goal.title,style:const TextStyle(fontWeight:FontWeight.w700))),
             PopupMenuButton<String>(onSelected:(v){if(v=='edit')_edit(goal:goal);if(v=='delete')_delete(goal);},itemBuilder:(_)=>const [PopupMenuItem(value:'edit',child:Text('Edit')),PopupMenuItem(value:'delete',child:Text('Hapus'))]),
           ]),
           Text('${_rupiah.format(goal.savedAmount)} dari ${_rupiah.format(goal.targetAmount)}'),
-          const SizedBox(height:8),LinearProgressIndicator(value:progress),
+          const SizedBox(height:8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 9,
+              color: goalColor,
+              backgroundColor: goalColor.withValues(alpha: 0.14),
+            ),
+          ),
           _OverviewLine(label:'Sisa target',value:_rupiah.format(remaining)),
           _OverviewLine(label:'Perlu ditabung per bulan',value:_rupiah.format(monthly)),
           Text('Target ${DateFormat('dd MMM yyyy','id_ID').format(goal.targetDate)} • ${(progress*100).round()}%',style:Theme.of(context).textTheme.bodySmall),
@@ -1105,7 +1142,10 @@ class _FinancialGoalsSectionState extends State<FinancialGoalsSection> {
               )),
             ]);
           }),
-        ])));
+        ]),
+            ),
+          ),
+        );
       }).toList());
     }),
   ]);
@@ -3254,8 +3294,16 @@ class _BillsSectionState extends State<BillsSection> {
                         final status = overdue ? 'Terlambat ${days.abs()} hari' : days == 0 ? 'Jatuh tempo hari ini' : 'Jatuh tempo $days hari lagi';
                         return ListTile(
                           dense: true,
-                          leading: Icon(overdue ? Icons.warning_amber_rounded : Icons.receipt_long, color: color),
-                          title: Text(bill.title),
+                          leading: CircleAvatar(
+                            radius: 19,
+                            backgroundColor: color.withValues(alpha: 0.13),
+                            child: Icon(
+                              overdue ? Icons.warning_amber_rounded : Icons.receipt_long,
+                              color: color,
+                              size: 19,
+                            ),
+                          ),
+                          title: Text(bill.title, style: const TextStyle(fontWeight: FontWeight.w600)),
                           subtitle: Text('${DateFormat('dd MMM yyyy', 'id_ID').format(bill.dueDate)} • $status', style: TextStyle(color: color)),
                           trailing: PopupMenuButton<String>(
                             onSelected: (action) {
@@ -3283,8 +3331,13 @@ class _BillsSectionState extends State<BillsSection> {
                   ),
                   ...paid.take(5).map((bill) => Card(
                     child: ListTile(
-                      leading: const Icon(Icons.check_circle, color: Colors.green),
-                      title: Text(bill.title),
+                      leading: CircleAvatar(
+                        radius: 19,
+                        backgroundColor: const Color(0xFF15966F).withValues(alpha: 0.12),
+                        child: const Icon(Icons.check_circle_outline,
+                          color: Color(0xFF15966F), size: 19),
+                      ),
+                      title: Text(bill.title, style: const TextStyle(fontWeight: FontWeight.w600)),
                       subtitle: Text(
                         '${DateFormat('dd MMM yyyy', 'id_ID').format(bill.dueDate)} • Lunas ${bill.paidAt == null ? '' : DateFormat('dd MMM yyyy', 'id_ID').format(bill.paidAt!)}',
                       ),
