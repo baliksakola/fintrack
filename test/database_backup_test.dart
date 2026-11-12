@@ -89,4 +89,30 @@ void main() {
     expect(schedules.single.nextDueDate, DateTime(2027, 1, 31));
   });
 
+  test('concurrent recurring processing does not duplicate transactions', () async {
+    await database.addAccount('Tunai', 'cash', 0);
+    final account = (await database.watchAccounts().first).single;
+
+    await database.addRecurringTransaction(
+      type: 'expense',
+      accountId: account.id,
+      amount: 15000,
+      title: 'Internet',
+      firstDueDate: DateTime(2026, 11, 1),
+    );
+
+    final results = await Future.wait([
+      database.processDueRecurringTransactions(
+        throughDate: DateTime(2026, 11, 12),
+      ),
+      database.processDueRecurringTransactions(
+        throughDate: DateTime(2026, 11, 12),
+      ),
+    ]);
+
+    expect(results.fold<int>(0, (total, count) => total + count), 1);
+    expect(await database.watchTransactions().first, hasLength(1));
+    expect(await database.balanceFor(account.id), -15000);
+  });
+
 }
