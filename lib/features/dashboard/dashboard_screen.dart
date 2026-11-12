@@ -1419,6 +1419,71 @@ class _DebtSectionState extends State<DebtSection> {
     notes.dispose();
   }
 
+  Future<void> _editDebt(Debt debt) async {
+    final party = TextEditingController(text: debt.partyName);
+    final title = TextEditingController(text: debt.title);
+    final amount = TextEditingController(text: debt.amount.toString());
+    final notes = TextEditingController(text: debt.notes ?? '');
+    DateTime? dueDate = debt.dueDate;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(debt.direction == 'payable' ? 'Edit utang' : 'Edit piutang'),
+          content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: party, decoration: const InputDecoration(labelText: 'Nama pihak terkait')),
+            TextField(controller: title, decoration: const InputDecoration(labelText: 'Keterangan')),
+            TextField(controller: amount, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Total nominal (Rp)')),
+            TextField(controller: notes, decoration: const InputDecoration(labelText: 'Catatan')),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Jatuh tempo'),
+              subtitle: Text(dueDate == null ? 'Belum ditentukan' : DateFormat('dd MMM yyyy', 'id_ID').format(dueDate!)),
+              trailing: const Icon(Icons.calendar_month),
+              onTap: () async {
+                final picked = await showDatePicker(context: dialogContext, initialDate: dueDate ?? DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime(2100));
+                if (picked != null) setDialogState(() => dueDate = picked);
+              },
+            ),
+          ])),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Batal')),
+            FilledButton(onPressed: () async {
+              final value = int.tryParse(amount.text.replaceAll('.', '').replaceAll(',', '')) ?? 0;
+              try {
+                await widget.database.updateDebt(debtId: debt.id, partyName: party.text, title: title.text, amount: value, dueDate: dueDate, notes: notes.text);
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
+              } catch (e) {
+                if (dialogContext.mounted) ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text(e.toString())));
+              }
+            }, child: const Text('Simpan perubahan')),
+          ],
+        ),
+      ),
+    );
+    party.dispose(); title.dispose(); amount.dispose(); notes.dispose();
+  }
+
+  Future<void> _deleteDebt(Debt debt) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Hapus rencana?'),
+        content: Text('Data "' + debt.title + '" akan dihapus. Data dengan riwayat pembayaran tidak dapat dihapus.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Batal')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Hapus')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await widget.database.deleteDebt(debt.id);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+  }
+
   Future<void> _payDebt(Debt debt, int remaining) async {
     final accounts = await widget.database.watchAccounts().first;
     if (!mounted) return;
@@ -1537,14 +1602,18 @@ class _DebtSectionState extends State<DebtSection> {
                       '\nTotal ${_rupiah.format(debt.amount)} • Sisa ${_rupiah.format(remaining)}',
                     ),
                     isThreeLine: true,
-                    trailing: paid
-                        ? const Icon(Icons.check_circle, color: Colors.green)
-                        : TextButton(
-                            onPressed: balance.connectionState == ConnectionState.done
-                                ? () => _payDebt(debt, remaining)
-                                : null,
-                            child: const Text('Bayar'),
-                          ),
+                    trailing: PopupMenuButton<String>(
+                      onSelected: (action) {
+                        if (action == 'edit') _editDebt(debt);
+                        if (action == 'delete') _deleteDebt(debt);
+                        if (action == 'pay' && !paid) _payDebt(debt, remaining);
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(value: 'edit', child: ListTile(dense: true, leading: Icon(Icons.edit_outlined), title: Text('Edit'))),
+                        const PopupMenuItem(value: 'delete', child: ListTile(dense: true, leading: Icon(Icons.delete_outline), title: Text('Hapus'))),
+                        if (!paid) const PopupMenuItem(value: 'pay', child: ListTile(dense: true, leading: Icon(Icons.payments_outlined), title: Text('Bayar'))),
+                      ],
+                    ),
                   ),
                 );
               },
@@ -1705,6 +1774,72 @@ class _BillsSectionState extends State<BillsSection> {
     amount.dispose();
   }
 
+  Future<void> _editBill(Bill bill) async {
+    final title = TextEditingController(text: bill.title);
+    final amount = TextEditingController(text: bill.amount.toString());
+    String category = bill.category;
+    DateTime dueDate = bill.dueDate;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Edit tagihan'),
+          content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(controller: title, decoration: const InputDecoration(labelText: 'Nama tagihan')),
+            TextField(controller: amount, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Nominal (Rp)')),
+            DropdownButtonFormField<String>(
+              initialValue: _expenseCategories.contains(category) ? category : _expenseCategories.first,
+              decoration: const InputDecoration(labelText: 'Kategori'),
+              items: _expenseCategories.map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
+              onChanged: (v) => setDialogState(() => category = v ?? category),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Tanggal jatuh tempo'),
+              subtitle: Text(DateFormat('dd MMMM yyyy', 'id_ID').format(dueDate)),
+              trailing: const Icon(Icons.calendar_month),
+              onTap: () async {
+                final picked = await showDatePicker(context: dialogContext, initialDate: dueDate, firstDate: DateTime(2020), lastDate: DateTime(2100));
+                if (picked != null) setDialogState(() => dueDate = picked);
+              },
+            ),
+          ])),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Batal')),
+            FilledButton(onPressed: () async {
+              final value = int.tryParse(amount.text.replaceAll('.', '').replaceAll(',', '')) ?? 0;
+              try {
+                await widget.database.updateBill(billId: bill.id, title: title.text, category: category, amount: value, dueDate: dueDate);
+                await _refreshReminders();
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
+              } catch (e) {
+                if (dialogContext.mounted) ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text(e.toString())));
+              }
+            }, child: const Text('Simpan perubahan')),
+          ],
+        ),
+      ),
+    );
+    title.dispose(); amount.dispose();
+  }
+
+  Future<void> _deleteBill(Bill bill) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Hapus tagihan?'),
+        content: Text('Tagihan "' + bill.title + '" akan dihapus dari daftar.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Batal')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Hapus')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await widget.database.deleteBill(bill.id);
+    await _refreshReminders();
+  }
+
   Future<void> _payBill(Bill bill) async {
     final accounts = await widget.database.watchAccounts().first;
     if (!mounted) return;
@@ -1841,16 +1976,16 @@ class _BillsSectionState extends State<BillsSection> {
                         style: TextStyle(color: color),
                       ),
                       isThreeLine: true,
-                      trailing: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Flexible(child: Text(_rupiah.format(bill.amount),
-                            style: const TextStyle(fontWeight: FontWeight.w600))),
-                          TextButton(
-                            onPressed: () => _payBill(bill),
-                            child: const Text('Bayar'),
-                          ),
+                      trailing: PopupMenuButton<String>(
+                        onSelected: (action) {
+                          if (action == 'edit') _editBill(bill);
+                          if (action == 'delete') _deleteBill(bill);
+                          if (action == 'pay') _payBill(bill);
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(value: 'edit', child: ListTile(dense: true, leading: Icon(Icons.edit_outlined), title: Text('Edit'))),
+                          const PopupMenuItem(value: 'delete', child: ListTile(dense: true, leading: Icon(Icons.delete_outline), title: Text('Hapus'))),
+                          const PopupMenuItem(value: 'pay', child: ListTile(dense: true, leading: Icon(Icons.payments_outlined), title: Text('Bayar'))),
                         ],
                       ),
                     ),
@@ -1872,10 +2007,7 @@ class _BillsSectionState extends State<BillsSection> {
                       ),
                       trailing: IconButton(
                         tooltip: 'Hapus tagihan',
-                        onPressed: () async {
-                          await widget.database.deleteBill(bill.id);
-                          await _refreshReminders();
-                        },
+                        onPressed: () => _deleteBill(bill),
                         icon: const Icon(Icons.delete_outline),
                       ),
                     ),
