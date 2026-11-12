@@ -916,7 +916,9 @@ class _PlanningPage extends StatelessWidget {
       const SizedBox(height: 20),
       BudgetSection(database: database),
       const SizedBox(height: 20),
-      FinancialGoalsSection(database: database),\n      const SizedBox(height: 20),\n      RecurringTransactionsSection(database: database),
+      FinancialGoalsSection(database: database),
+      const SizedBox(height: 20),
+      RecurringTransactionsSection(database: database),
     ],
   );
 }
