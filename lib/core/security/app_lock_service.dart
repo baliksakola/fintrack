@@ -17,14 +17,21 @@ class AppLockService {
   static const _maxPinAttempts = 5;
   static const _lockDuration = Duration(seconds: 30);
   static const _pinHashPrefix = 'v1';
-  static final _sha256 = Sha256();
+  static final _pinKdf = Pbkdf2(
+    macAlgorithm: Hmac.sha256(),
+    iterations: 210000,
+    bits: 256,
+  );
   final LocalAuthentication _auth = LocalAuthentication();
 
   Future<bool> hasPin() async => (await _storage.read(key: _pinKey)) != null;
 
   Future<String> _hashPin(String pin, String salt) async {
-    final digest = await _sha256.hash(utf8.encode('$salt:$pin'));
-    return base64UrlEncode(digest.bytes);
+    final key = await _pinKdf.deriveKeyFromPassword(
+      password: pin,
+      nonce: base64Url.decode(salt),
+    );
+    return base64UrlEncode(await key.extractBytes());
   }
 
   Future<String> _createPinRecord(String pin) async {
