@@ -53,7 +53,7 @@ class AppLockService {
   }
 
   Future<void> setPin(String pin) async {
-    if (!RegExp(r'^\d{6}).hasMatch(pin)) {
+    if (!RegExp(r'^\d{6}$').hasMatch(pin)) {
       throw ArgumentError('PIN harus terdiri dari 6 angka.');
     }
     await _storage.write(key: _pinKey, value: await _createPinRecord(pin));
