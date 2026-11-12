@@ -153,4 +153,39 @@ void main() {
     expect(await database.watchTransactions().first, hasLength(1));
   });
 
+  test('concurrent debt payments cannot exceed the outstanding amount', () async {
+    await database.addAccount('Tunai', 'cash', 100000);
+    final account = (await database.watchAccounts().first).single;
+    await database.addDebt(
+      direction: 'payable',
+      partyName: 'Penyedia',
+      title: 'Utang barang',
+      amount: 30000,
+    );
+    final debt = (await database.watchDebts().first).single;
+
+    Future<bool> attemptPayment() async {
+      try {
+        await database.addDebtPayment(
+          debtId: debt.id,
+          accountId: account.id,
+          amount: 20000,
+        );
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    final results = await Future.wait([
+      attemptPayment(),
+      attemptPayment(),
+    ]);
+
+    expect(results.where((success) => success), hasLength(1));
+    expect(await database.debtRemaining(debt.id), 10000);
+    expect(await database.balanceFor(account.id), 80000);
+    expect(await database.watchTransactions().first, hasLength(1));
+  });
+
 }
