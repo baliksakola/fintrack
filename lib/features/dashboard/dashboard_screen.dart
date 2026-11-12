@@ -774,7 +774,7 @@ class _FinancialGoalsSectionState extends State<FinancialGoalsSection> {
     title.dispose();target.dispose();saved.dispose();
   }
   Future<void> _delete(FinancialGoal goal)async{
-    final ok=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(title:const Text('Hapus target?'),content:Text('Target "\${goal.title}" akan dihapus.'),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Batal')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Hapus'))]));
+    final ok=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(title:const Text('Hapus target?'),content:Text('Target "${goal.title}" akan dihapus.'),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Batal')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Hapus'))]));
     if(ok==true)await widget.database.deleteFinancialGoal(goal.id);
   }
   @override
@@ -790,11 +790,11 @@ class _FinancialGoalsSectionState extends State<FinancialGoalsSection> {
         final progress=(goal.savedAmount/goal.targetAmount).clamp(0.0,1.0);
         return Card(child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           Row(children:[Expanded(child:Text(goal.title,style:const TextStyle(fontWeight:FontWeight.w600))),PopupMenuButton<String>(onSelected:(v){if(v=='edit')_edit(goal:goal);if(v=='delete')_delete(goal);},itemBuilder:(_)=>const [PopupMenuItem(value:'edit',child:Text('Edit')),PopupMenuItem(value:'delete',child:Text('Hapus'))])]),
-          Text('\${_rupiah.format(goal.savedAmount)} dari \${_rupiah.format(goal.targetAmount)}'),
+          Text('${_rupiah.format(goal.savedAmount)} dari ${_rupiah.format(goal.targetAmount)}'),
           const SizedBox(height:8),LinearProgressIndicator(value:progress),
           _OverviewLine(label:'Sisa target',value:_rupiah.format(remaining)),
           _OverviewLine(label:'Perlu ditabung per bulan',value:_rupiah.format(monthly)),
-          Text('Target \${DateFormat('dd MMM yyyy','id_ID').format(goal.targetDate)} • \${(progress*100).round()}%',style:Theme.of(context).textTheme.bodySmall),
+          Text('Target ${DateFormat('dd MMM yyyy','id_ID').format(goal.targetDate)} • ${(progress*100).round()}%',style:Theme.of(context).textTheme.bodySmall),
         ])));
       }).toList());
     }),
@@ -830,7 +830,7 @@ class _CalendarPageState extends State<_CalendarPage>{
           Row(children:[Expanded(child:_OverviewMetric(title:'Kewajiban',value:outgoing,color:Colors.red)),const SizedBox(width:8),Expanded(child:_OverviewMetric(title:'Piutang',value:incoming,color:Colors.green))]),
           const SizedBox(height:12),Text('Agenda keuangan',style:Theme.of(context).textTheme.titleMedium),
           if(events.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(14),child:Text('Tidak ada tagihan atau jatuh tempo bulan ini.')))
-          else ...events.map((e)=>Card(child:ListTile(leading:CircleAvatar(child:Icon(e.income?Icons.call_received:Icons.event_note)),title:Text(e.title),subtitle:Text('\${DateFormat('dd MMM yyyy','id_ID').format(e.date)} • \${e.type} • \${e.detail}'),trailing:Text('\${e.income?'+':'-'}\${_rupiah.format(e.amount)}',style:TextStyle(fontWeight:FontWeight.w600,color:e.income?Colors.green:Colors.red))))),
+          else ...events.map((e)=>Card(child:ListTile(leading:CircleAvatar(child:Icon(e.income?Icons.call_received:Icons.event_note)),title:Text(e.title),subtitle:Text('${DateFormat('dd MMM yyyy','id_ID').format(e.date)} • ${e.type} • ${e.detail}'),trailing:Text('${e.income?'+':'-'}${_rupiah.format(e.amount)}',style:TextStyle(fontWeight:FontWeight.w600,color:e.income?Colors.green:Colors.red))))),
         ]);
       })),
     ]);
