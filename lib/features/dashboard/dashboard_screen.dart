@@ -579,67 +579,6 @@ class _ActivityPage extends StatelessWidget {
   );
 }
 
-class _MonthlyBillsPage extends StatelessWidget {
-  const _MonthlyBillsPage({required this.database});
-  final AppDatabase database;
-
-  @override
-  Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final monthStart = DateTime(now.year, now.month);
-    final monthEnd = DateTime(now.year, now.month + 1);
-    return ListView(padding: const EdgeInsets.all(16), children: [
-      Text('Tagihan rutin bulan ini', style: Theme.of(context).textTheme.titleLarge),
-      Text(DateFormat('MMMM yyyy', 'id_ID').format(now), style: Theme.of(context).textTheme.bodySmall),
-      const SizedBox(height: 10),
-      StreamBuilder<int>(
-        stream: database.watchTotalBalance(),
-        builder: (context, balanceSnapshot) => StreamBuilder<List<Bill>>(
-          stream: database.watchBills(),
-          builder: (context, billSnapshot) {
-            final bills = (billSnapshot.data ?? <Bill>[]).where((b) =>
-              b.isMonthly && !b.isPaid &&
-              !b.dueDate.isBefore(monthStart) && b.dueDate.isBefore(monthEnd)
-            ).toList()..sort((a,b) => a.dueDate.compareTo(b.dueDate));
-            final total = bills.fold<int>(0, (sum,b) => sum+b.amount);
-            final balance = balanceSnapshot.data ?? 0;
-            final afterBills = balance - total;
-            final byCategory = <String,int>{};
-            for (final bill in bills) {
-              byCategory[bill.category] = (byCategory[bill.category] ?? 0) + bill.amount;
-            }
-            final categories = byCategory.entries.toList()..sort((a,b) => b.value.compareTo(a.value));
-            return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Kondisi saldo setelah tagihan bulanan'),
-                const SizedBox(height: 12),
-                _OverviewLine(label: 'Saldo tersedia saat ini', value: _rupiah.format(balance), strong: true),
-                _OverviewLine(label: 'Total tagihan bulanan belum dibayar', value: _rupiah.format(total), color: Colors.red),
-                const Divider(),
-                _OverviewLine(label: afterBills >= 0 ? 'Perkiraan saldo tersisa' : 'Kekurangan dana', value: _rupiah.format(afterBills.abs()), color: afterBills >= 0 ? Colors.green : Colors.red, strong: true),
-                Text(afterBills >= 0 ? 'Saldo mencukupi untuk membayar semua tagihan rutin bulan ini.' : 'Saldo belum mencukupi. Perlu tambahan dana sebesar ${_rupiah.format(afterBills.abs())}.', style: Theme.of(context).textTheme.bodySmall),
-              ]))),
-              const SizedBox(height: 8),
-              Text('Rincian per kategori', style: Theme.of(context).textTheme.titleMedium),
-              if (categories.isEmpty) const Card(child: Padding(padding: EdgeInsets.all(14), child: Text('Tidak ada tagihan rutin yang belum dibayar bulan ini.')))
-              else ...categories.map((entry) => Card(child: ListTile(title: Text(entry.key), subtitle: Text('${bills.where((b) => b.category == entry.key).length} tagihan'), trailing: Text(_rupiah.format(entry.value), style: const TextStyle(fontWeight: FontWeight.w600))))),
-              const SizedBox(height: 8),
-              Text('Daftar tagihan', style: Theme.of(context).textTheme.titleMedium),
-              if (bills.isEmpty) const Text('Semua tagihan rutin bulan ini sudah lunas atau belum ada jadwal.')
-              else ...bills.map((bill) => Card(child: ListTile(
-                leading: const Icon(Icons.event_note),
-                title: Text(bill.title),
-                subtitle: Text('${bill.category} • Jatuh tempo ${DateFormat('dd MMM yyyy','id_ID').format(bill.dueDate)}'),
-                trailing: Text(_rupiah.format(bill.amount), style: const TextStyle(fontWeight: FontWeight.w600)),
-              ))),
-            ]);
-          },
-        ),
-      ),
-    ]);
-  }
-}
-
 class _DebtGroup extends StatelessWidget {
   const _DebtGroup({required this.title, required this.icon, required this.debts, required this.database, required this.onEdit, required this.onDelete, required this.onPay});
   final String title;
