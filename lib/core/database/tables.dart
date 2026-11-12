@@ -115,3 +115,20 @@ class FinancialGoals extends Table {
   @override
   Set<Column<Object>> get primaryKey => {id};
 }
+
+
+class RecurringTransactions extends Table {
+  TextColumn get id => text()();
+  TextColumn get type => text()(); // income / expense
+  TextColumn get accountId => text().references(Accounts, #id)();
+  IntColumn get amount => integer()();
+  TextColumn get title => text()();
+  TextColumn get category => text().nullable()();
+  DateTimeColumn get nextDueDate => dateTime()();
+  IntColumn get dayOfMonth => integer()();
+  DateTimeColumn get endDate => dateTime().nullable()();
+  BoolColumn get isActive => boolean().withDefault(const Constant(true))();
+  DateTimeColumn get createdAt => dateTime()();
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
