@@ -855,7 +855,7 @@ class AppDatabase extends _$AppDatabase {
     return account.openingBalance + total.read<int>('total');
   }
 
-  Future<String> exportBackupJson() async {
+  Future<String> exportBackupJson() async => transaction(() async {
     final backup = <String, dynamic>{
       'format': 'fintrack-backup',
       'version': 1,
@@ -919,8 +919,7 @@ class AppDatabase extends _$AppDatabase {
         'createdAt': row.createdAt.toIso8601String(),
       }).toList(),
     };
-    return const JsonEncoder.withIndent('  ').convert(backup);
-  }
+    return const JsonEncoder.withIndent('  ').convert(backup);  });
 
   Future<void> restoreBackupJson(String source) async {
     final decoded = jsonDecode(source);
