@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fintrack/core/database/app_database.dart';
@@ -248,6 +249,56 @@ void main() {
     expect(() => database.deleteFinancialGoal(goal.id), throwsStateError);
     expect(await database.watchFinancialGoals().first, hasLength(1));
     expect((await database.watchFinancialGoals().first).single.savedAmount, 10000);
+  });
+
+
+  test('total balance excludes archived accounts but preserves their ledger history', () async {
+    await database.addAccount('Tunai', 'cash', 100000);
+    await database.addAccount('Bank', 'bank', 200000);
+    final accounts = await database.watchAccounts().first;
+    final cash = accounts.firstWhere((item) => item.name == 'Tunai');
+    final bank = accounts.firstWhere((item) => item.name == 'Bank');
+
+    await database.addIncome(
+      accountId: cash.id,
+      amount: 50000,
+      title: 'Pemasukan',
+    );
+    await database.addExpense(
+      accountId: bank.id,
+      amount: 20000,
+      title: 'Pengeluaran',
+    );
+    expect(await database.watchTotalBalance().first, 330000);
+
+    await (database.update(database.accounts)
+      ..where((account) => account.id.equals(bank.id)))
+      .write(const AccountsCompanion(archived: Value(true)));
+
+    expect(await database.watchTotalBalance().first, 150000);
+    expect(await database.balanceFor(bank.id), 180000);
+    expect(await database.watchTransactions().first, hasLength(2));
+  });
+
+  test('transfers keep combined balance unchanged and update both accounts', () async {
+    await database.addAccount('Tunai', 'cash', 100000);
+    await database.addAccount('Bank', 'bank', 50000);
+    final accounts = await database.watchAccounts().first;
+    final cash = accounts.firstWhere((item) => item.name == 'Tunai');
+    final bank = accounts.firstWhere((item) => item.name == 'Bank');
+
+    final before = await database.watchTotalBalance().first;
+    await database.createTransfer(
+      fromAccountId: cash.id,
+      toAccountId: bank.id,
+      amount: 30000,
+      title: 'Pindah dana',
+    );
+
+    expect(await database.balanceFor(cash.id), 70000);
+    expect(await database.balanceFor(bank.id), 80000);
+    expect(await database.watchTotalBalance().first, before);
+    expect(await database.watchTransactions().first, hasLength(1));
   });
 
 }
