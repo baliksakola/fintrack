@@ -10,6 +10,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../core/database/app_database.dart';
+import '../../core/security/app_lock_service.dart';
 
 final _rupiah = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
@@ -723,6 +724,69 @@ class _ReportsPage extends StatelessWidget {
   );
 }
 
+class AppSecuritySection extends StatefulWidget {
+  const AppSecuritySection({super.key});
+
+  @override
+  State<AppSecuritySection> createState() => _AppSecuritySectionState();
+}
+
+class _AppSecuritySectionState extends State<AppSecuritySection> {
+  bool _enabled = false;
+  bool _available = false;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final values = await Future.wait([
+      AppLockService.instance.biometricEnabled(),
+      AppLockService.instance.canUseBiometrics(),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _enabled = values[0];
+      _available = values[1];
+      _loading = false;
+    });
+  }
+
+  Future<void> _toggle(bool value) async {
+    try {
+      await AppLockService.instance.setBiometricEnabled(value);
+      if (!mounted) return;
+      setState(() => _enabled = value);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(value ? 'Biometrik diaktifkan.' : 'Biometrik dinonaktifkan. PIN tetap aktif.'),
+      ));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const ListTile(
+        leading: Icon(Icons.security),
+        title: Text('Keamanan aplikasi'),
+        subtitle: Text('Aplikasi dikunci dengan PIN 6 angka. PIN disimpan secara aman di perangkat.'),
+      ),
+      SwitchListTile(
+        value: _enabled,
+        onChanged: _loading || !_available ? null : _toggle,
+        title: const Text('Buka dengan biometrik'),
+        subtitle: Text(_available ? 'Gunakan sidik jari atau wajah yang terdaftar di perangkat.' : 'Biometrik belum tersedia atau belum diatur pada perangkat.'),
+        secondary: const Icon(Icons.fingerprint),
+      ),
+    ]),
+  );
+}
+
 class _MorePage extends StatelessWidget {
   const _MorePage({required this.database});
   final AppDatabase database;
@@ -733,6 +797,8 @@ class _MorePage extends StatelessWidget {
     children: [
       Text('Pengelolaan data', style: Theme.of(context).textTheme.titleMedium),
       const SizedBox(height: 8),
+      const AppSecuritySection(),
+      const SizedBox(height: 16),
       BackupSection(database: database),
     ],
   );
