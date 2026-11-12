@@ -358,6 +358,51 @@ void main() {
     expect(await db.balanceFor(account.id), 450000);
   });
 
+
+  test('recurring transactions catch up missed months exactly once', () async {
+    await db.addAccount('Bank', 'Bank', 100000);
+    final account = (await db.watchAccounts().first).single;
+    await db.addRecurringTransaction(
+      type: 'expense',
+      accountId: account.id,
+      amount: 10000,
+      title: 'Internet',
+      category: 'Tagihan',
+      firstDueDate: DateTime(2026, 1, 31),
+      endDate: DateTime(2026, 3, 31),
+    );
+    final firstRun = await db.processDueRecurringTransactions(throughDate: DateTime(2026, 4, 1));
+    expect(firstRun, 3);
+    expect(await db.balanceFor(account.id), 70000);
+    final transactions = await db.watchTransactions().first;
+    expect(transactions, hasLength(3));
+    expect(transactions.map((t) => t.occurredAt).toSet(), {
+      DateTime(2026, 1, 31), DateTime(2026, 2, 28), DateTime(2026, 3, 31),
+    });
+    final secondRun = await db.processDueRecurringTransactions(throughDate: DateTime(2026, 4, 1));
+    expect(secondRun, 0);
+    expect(await db.balanceFor(account.id), 70000);
+    final schedule = (await db.watchRecurringTransactions().first).single;
+    expect(schedule.isActive, isFalse);
+  });
+
+  test('recurring schedules are preserved in backup and restore', () async {
+    await db.addAccount('Bank', 'Bank', 0);
+    final account = (await db.watchAccounts().first).single;
+    await db.addRecurringTransaction(
+      type: 'income', accountId: account.id, amount: 250000,
+      title: 'Gaji', category: 'Gaji', firstDueDate: DateTime(2026, 12, 1),
+    );
+    final backup = await db.exportBackupJson();
+    await db.deleteRecurringTransaction((await db.watchRecurringTransactions().first).single.id);
+    await db.restoreBackupJson(backup);
+    final restored = (await db.watchRecurringTransactions().first).single;
+    expect(restored.title, 'Gaji');
+    expect(restored.type, 'income');
+    expect(restored.amount, 250000);
+    expect(restored.nextDueDate, DateTime(2026, 12, 1));
+  });
+
   test('invalid amount is rejected', () async {
     await db.addAccount('Tunai', 'Tunai', 0);
     final account = (await db.watchAccounts().first).single;
