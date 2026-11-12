@@ -35,8 +35,11 @@ class FinTrackApp extends StatelessWidget {
       visualDensity: VisualDensity.standard,
       fontFamily: 'Roboto',
       colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF2563EB),
+        seedColor: const Color(0xFF3157D5),
         surface: const Color(0xFFFDFEFF),
+      ).copyWith(
+        secondary: const Color(0xFF0F9D8A),
+        tertiary: const Color(0xFFE69A2D),
       ),
       scaffoldBackgroundColor: const Color(0xFFF5F7FB),
       dividerTheme: const DividerThemeData(
@@ -86,7 +89,8 @@ class FinTrackApp extends StatelessWidget {
         ),
       ),
       cardTheme: CardThemeData(
-        elevation: 0,
+        elevation: 1,
+        shadowColor: const Color(0xFF263B63).withValues(alpha: 0.06),
         color: Colors.white,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
@@ -111,8 +115,23 @@ class FinTrackApp extends StatelessWidget {
         height: 68,
         elevation: 0,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        indicatorColor: Color(0xFFDBEAFE),
+        indicatorColor: Color(0xFFDCE6FF),
         backgroundColor: Colors.white,
+        iconTheme: WidgetStateProperty.resolveWith<IconThemeData>((states) =>
+          IconThemeData(
+            color: states.contains(WidgetState.selected)
+                ? const Color(0xFF3157D5)
+                : const Color(0xFF7A8498),
+          ),
+        ),
+        labelTextStyle: WidgetStateProperty.resolveWith<TextStyle>((states) =>
+          TextStyle(
+            fontSize: 11,
+            fontWeight: states.contains(WidgetState.selected)
+                ? FontWeight.w700
+                : FontWeight.w500,
+          ),
+        ),
       ),
     ),
     darkTheme: ThemeData(
@@ -131,8 +150,11 @@ class FinTrackApp extends StatelessWidget {
         horizontalTitleGap: 12,
       ),
       colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF60A5FA),
+        seedColor: const Color(0xFF82A8FF),
         brightness: Brightness.dark,
+      ).copyWith(
+        secondary: const Color(0xFF55C6B2),
+        tertiary: const Color(0xFFFFC36B),
       ),
       appBarTheme: AppBarTheme(
         centerTitle: false,
@@ -175,11 +197,27 @@ class FinTrackApp extends StatelessWidget {
         elevation: 0,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         backgroundColor: const Color(0xFF171D28),
-        indicatorColor: const Color(0xFF263C5B),
+        indicatorColor: const Color(0xFF293D67),
         surfaceTintColor: Colors.transparent,
+        iconTheme: WidgetStateProperty.resolveWith<IconThemeData>((states) =>
+          IconThemeData(
+            color: states.contains(WidgetState.selected)
+                ? const Color(0xFFB8CCFF)
+                : const Color(0xFF9AA7BB),
+          ),
+        ),
+        labelTextStyle: WidgetStateProperty.resolveWith<TextStyle>((states) =>
+          TextStyle(
+            fontSize: 11,
+            fontWeight: states.contains(WidgetState.selected)
+                ? FontWeight.w700
+                : FontWeight.w500,
+          ),
+        ),
       ),
       cardTheme: CardThemeData(
-        elevation: 0,
+        elevation: 1,
+        shadowColor: Colors.black.withValues(alpha: 0.18),
         color: const Color(0xFF171D28),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
