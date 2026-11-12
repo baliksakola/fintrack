@@ -51,6 +51,9 @@ class AppDatabase extends _$AppDatabase {
       if (from < 6) {
         await m.createTable(financialGoals);
       }
+      if (from < 7) {
+        await m.createTable(recurringTransactions);
+      }
     },
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
