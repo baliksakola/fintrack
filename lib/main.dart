@@ -2,7 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'core/database/app_database.dart';
-import 'features/dashboard/dashboard_screen.dart';
+import 'core/security/app_lock_gate.dart';
 import 'core/notifications/bill_notification_service.dart';
 
 Future<void> main() async {
@@ -21,7 +21,7 @@ class FinTrackApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: 'FinTrack',
+    title: 'FinTrack Paday',
     debugShowCheckedModeBanner: false,
     themeMode: ThemeMode.system,
     theme: ThemeData(
@@ -86,6 +86,6 @@ class FinTrackApp extends StatelessWidget {
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       ),
     ),
-    home: const DashboardScreen(),
+    home: const AppLockGate(),
   );
 }
