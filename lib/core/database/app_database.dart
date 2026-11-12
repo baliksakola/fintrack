@@ -115,21 +115,28 @@ class AppDatabase extends _$AppDatabase {
     required int amount,
   }) async {
     if (amount <= 0) throw ArgumentError('Nominal pembayaran harus lebih dari nol.');
-    final debt = await (select(debts)..where((d) => d.id.equals(debtId)))
-        .getSingleOrNull();
-    if (debt == null) throw StateError('Data utang/piutang tidak ditemukan.');
-    final account = await (select(accounts)..where((a) =>
-      a.id.equals(accountId) & a.archived.equals(false))).getSingleOrNull();
-    if (account == null) throw StateError('Rekening tidak ditemukan.');
-    final remaining = await debtRemaining(debtId);
-    if (amount > remaining) {
-      throw ArgumentError('Pembayaran melebihi sisa kewajiban.');
-    }
 
-    final now = DateTime.now();
-    final transactionId = _uuid.v4();
-    final isReceivable = debt.direction == 'receivable';
     await transaction(() async {
+      // Validate the outstanding amount inside the same transaction as the
+      // payment insert, preventing concurrent payments from overpaying a debt.
+      final debt = await (select(debts)..where((d) => d.id.equals(debtId)))
+          .getSingleOrNull();
+      if (debt == null) throw StateError('Data utang/piutang tidak ditemukan.');
+      final account = await (select(accounts)..where((a) =>
+        a.id.equals(accountId) & a.archived.equals(false))).getSingleOrNull();
+      if (account == null) throw StateError('Rekening tidak ditemukan.');
+
+      final paid = await (selectOnly(debtPayments)
+        ..addColumns([debtPayments.amount.sum()])
+        ..where(debtPayments.debtId.equals(debtId))).getSingle();
+      final remaining = debt.amount - (paid.read(debtPayments.amount.sum()) ?? 0);
+      if (amount > remaining) {
+        throw ArgumentError('Pembayaran melebihi sisa kewajiban.');
+      }
+
+      final now = DateTime.now();
+      final transactionId = _uuid.v4();
+      final isReceivable = debt.direction == 'receivable';
       await into(financeTransactions).insert(FinanceTransactionsCompanion.insert(
         id: transactionId,
         type: isReceivable ? 'income' : 'expense',
