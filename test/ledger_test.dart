@@ -109,6 +109,58 @@ void main() {
     expect(await db.balanceFor(accounts.first.id), 500000);
   });
 
+  test('goal with contribution history keeps saved amount ledger-driven', () async {
+    await db.addAccount('Operasional', 'Bank', 500000);
+    await db.addAccount('Tabungan', 'Bank', 0);
+    final accounts = await db.watchAccounts().first;
+    await db.saveFinancialGoal(
+      title: 'Dana Darurat',
+      targetAmount: 300000,
+      savedAmount: 0,
+      targetDate: DateTime(2027, 12, 31),
+    );
+    final goal = (await db.watchFinancialGoals().first).single;
+    await db.addGoalContribution(
+      goalId: goal.id,
+      fromAccountId: accounts.first.id,
+      toAccountId: accounts.last.id,
+      amount: 100000,
+    );
+
+    await expectLater(
+      db.saveFinancialGoal(
+        goalId: goal.id,
+        title: 'Dana Darurat',
+        targetAmount: 500000,
+        savedAmount: 50000,
+        targetDate: DateTime(2028, 6, 30),
+      ),
+      throwsStateError,
+    );
+    await expectLater(
+      db.saveFinancialGoal(
+        goalId: goal.id,
+        title: 'Dana Darurat',
+        targetAmount: 50000,
+        savedAmount: 100000,
+        targetDate: DateTime(2028, 6, 30),
+      ),
+      throwsArgumentError,
+    );
+
+    await db.saveFinancialGoal(
+      goalId: goal.id,
+      title: 'Dana Darurat Revisi',
+      targetAmount: 500000,
+      savedAmount: 100000,
+      targetDate: DateTime(2028, 6, 30),
+    );
+    final updated = (await db.watchFinancialGoals().first).single;
+    expect(updated.title, 'Dana Darurat Revisi');
+    expect(updated.savedAmount, 100000);
+    expect(updated.targetAmount, 500000);
+  });
+
   test('all-account query retains archived accounts for historical reports', () async {
     await db.addAccount('Aktif', 'Bank', 100000);
     await db.addAccount('Arsip', 'Bank', 50000);
