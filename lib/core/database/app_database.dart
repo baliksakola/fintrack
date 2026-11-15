@@ -657,16 +657,36 @@ class AppDatabase extends _$AppDatabase {
         createdAt: DateTime.now(),
       ));
     } else {
-      final existing = await (select(financialGoals)..where((g) => g.id.equals(goalId))).getSingleOrNull();
-      if (existing == null) throw StateError('Target tabungan tidak ditemukan.');
-      await (update(financialGoals)..where((g) => g.id.equals(goalId))).write(
+      await transaction(() async {
+        final existing = await (select(financialGoals)
+          ..where((g) => g.id.equals(goalId))).getSingleOrNull();
+        if (existing == null) {
+          throw StateError('Target tabungan tidak ditemukan.');
+        }
+
+        final hasContributionHistory = await (select(financeTransactions)
+          ..where((t) => t.category.equals('goal:$goalId')))
+          .getSingleOrNull() != null;
+        if (hasContributionHistory && savedAmount != existing.savedAmount) {
+          throw StateError(
+            'Saldo terkumpul tidak dapat diubah manual karena target memiliki riwayat setoran.',
+          );
+        }
+        if (targetAmount < existing.savedAmount) {
+          throw ArgumentError(
+            'Nominal target tidak boleh lebih kecil dari saldo yang sudah terkumpul.',
+          );
+        }
+
+        await (update(financialGoals)..where((g) => g.id.equals(goalId))).write(
         FinancialGoalsCompanion(
           title: Value(title.trim()),
           targetAmount: Value(targetAmount),
           savedAmount: Value(savedAmount),
           targetDate: Value(normalizedDate),
-        ),
-      );
+          ),
+        );
+      });
     }
   }
 
