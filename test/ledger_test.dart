@@ -387,6 +387,23 @@ void main() {
     expect(transactions.single.type, 'expense');
     expect(transactions.single.amount, 150000);
     expect(transactions.single.title, 'Pembayaran: Internet');
+    final paidBill = (await db.watchBills().first).singleWhere((item) => item.isPaid);
+    expect(paidBill.paymentTransactionId, transactions.single.id);
+    await expectLater(
+      db.updateTransaction(
+        transactionId: transactions.single.id,
+        accountId: account.id,
+        amount: 1,
+        title: 'Pengeluaran biasa',
+        category: 'Lainnya',
+      ),
+      throwsStateError,
+    );
+    await expectLater(
+      db.deleteTransaction(transactions.single.id),
+      throwsStateError,
+    );
+    expect(await db.balanceFor(account.id), 350000);
 
     final bills = await db.watchBills().first;
     expect(bills, hasLength(2));
