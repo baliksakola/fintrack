@@ -540,6 +540,7 @@ void main() {
       category: 'Tagihan',
       amount: 25000,
       dueDate: DateTime(2026, 11, 1),
+      isMonthly: false,
     );
     final backup = jsonDecode(await db.exportBackupJson()) as Map<String, dynamic>;
     final bill = (backup['bills'] as List).single as Map<String, dynamic>;
