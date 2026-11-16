@@ -1079,6 +1079,11 @@ class AppDatabase extends _$AppDatabase {
     for (final row in transactionRows) {
       requireReference(accountIds.contains(string(row, 'accountId')),
           'transaksi ke rekening');
+      final category = row['category'];
+      if (category is String && category.startsWith('goal:')) {
+        requireReference(goalIds.contains(category.substring(5)),
+            'setoran ke target tabungan');
+      }
     }
     for (final row in ledgerRows) {
       requireReference(transactionIds.contains(string(row, 'transactionId')),
