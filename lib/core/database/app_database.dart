@@ -1076,13 +1076,32 @@ class AppDatabase extends _$AppDatabase {
       if (!exists) throw FormatException('Relasi backup tidak valid: $relation.');
     }
 
+    final goalContributionTotals = <String, int>{};
+    for (final row in goalRows) {
+      final target = integer(row, 'targetAmount');
+      final saved = integer(row, 'savedAmount');
+      if (target <= 0 || saved < 0 || saved > target) {
+        throw const FormatException('Nominal target atau saldo tabungan tidak valid.');
+      }
+    }
     for (final row in transactionRows) {
       requireReference(accountIds.contains(string(row, 'accountId')),
           'transaksi ke rekening');
       final category = row['category'];
       if (category is String && category.startsWith('goal:')) {
-        requireReference(goalIds.contains(category.substring(5)),
-            'setoran ke target tabungan');
+        final goalId = category.substring(5);
+        requireReference(goalIds.contains(goalId), 'setoran ke target tabungan');
+        if (string(row, 'type') != 'transfer') {
+          throw const FormatException('Setoran target tabungan harus berupa transfer.');
+        }
+        goalContributionTotals[goalId] =
+            (goalContributionTotals[goalId] ?? 0) + integer(row, 'amount');
+      }
+    }
+    for (final row in goalRows) {
+      final goalId = string(row, 'id');
+      if ((goalContributionTotals[goalId] ?? 0) > integer(row, 'savedAmount')) {
+        throw const FormatException('Riwayat setoran melebihi saldo target tabungan.');
       }
     }
     final ledgerByTransaction = <String, List<Map<String, dynamic>>>{};
