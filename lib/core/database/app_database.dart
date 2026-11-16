@@ -1085,11 +1085,65 @@ class AppDatabase extends _$AppDatabase {
             'setoran ke target tabungan');
       }
     }
+    final ledgerByTransaction = <String, List<Map<String, dynamic>>>{};
+    for (final row in ledgerRows) {
+      final transactionId = string(row, 'transactionId');
+      (ledgerByTransaction[transactionId] ??= <Map<String, dynamic>>[]).add(row);
+    }
+    final transferByTransaction = <String, Map<String, dynamic>>{};
+    for (final row in transferRows) {
+      final transactionId = string(row, 'transactionId');
+      if (transferByTransaction.containsKey(transactionId)) {
+        throw const FormatException('Satu transaksi memiliki lebih dari satu relasi transfer.');
+      }
+      transferByTransaction[transactionId] = row;
+    }
+
+    for (final row in transactionRows) {
+      final id = string(row, 'id');
+      final type = string(row, 'type');
+      final accountId = string(row, 'accountId');
+      final amount = integer(row, 'amount');
+      if (amount <= 0 || !['income', 'expense', 'transfer'].contains(type)) {
+        throw const FormatException('Nominal atau tipe transaksi tidak valid.');
+      }
+      final entries = ledgerByTransaction[id] ?? const <Map<String, dynamic>>[];
+      if (type == 'income' || type == 'expense') {
+        final expectedDelta = type == 'income' ? amount : -amount;
+        if (entries.length != 1 ||
+            string(entries.single, 'accountId') != accountId ||
+            integer(entries.single, 'amountDelta') != expectedDelta ||
+            transferByTransaction.containsKey(id)) {
+          throw const FormatException('Nilai ledger tidak sesuai dengan transaksi.');
+        }
+      } else {
+        final transfer = transferByTransaction[id];
+        if (transfer == null || entries.length != 2 ||
+            string(transfer, 'fromAccountId') != accountId ||
+            string(transfer, 'fromAccountId') == string(transfer, 'toAccountId')) {
+          throw const FormatException('Relasi transfer tidak valid.');
+        }
+        final fromId = string(transfer, 'fromAccountId');
+        final toId = string(transfer, 'toAccountId');
+        final fromEntries = entries.where((entry) =>
+            string(entry, 'accountId') == fromId &&
+            integer(entry, 'amountDelta') == -amount).length;
+        final toEntries = entries.where((entry) =>
+            string(entry, 'accountId') == toId &&
+            integer(entry, 'amountDelta') == amount).length;
+        if (fromEntries != 1 || toEntries != 1) {
+          throw const FormatException('Nilai ledger transfer tidak sesuai nominal.');
+        }
+      }
+    }
     for (final row in ledgerRows) {
       requireReference(transactionIds.contains(string(row, 'transactionId')),
           'ledger ke transaksi');
       requireReference(accountIds.contains(string(row, 'accountId')),
           'ledger ke rekening');
+    }
+    if (ledgerByTransaction.length != transactionIds.length) {
+      throw const FormatException('Terdapat transaksi tanpa catatan ledger.');
     }
     for (final row in transferRows) {
       requireReference(transactionIds.contains(string(row, 'transactionId')),
