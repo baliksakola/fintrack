@@ -1153,24 +1153,60 @@ class AppDatabase extends _$AppDatabase {
       requireReference(accountIds.contains(string(row, 'toAccountId')),
           'transfer ke rekening');
     }
+    final transactionById = <String, Map<String, dynamic>>{
+      for (final row in transactionRows) string(row, 'id'): row,
+    };
+    final debtById = <String, Map<String, dynamic>>{
+      for (final row in debtRows) string(row, 'id'): row,
+    };
+    final paidByDebt = <String, int>{};
+    final paymentTransactionIds = <String>{};
     for (final row in debtPaymentRows) {
-      requireReference(debtIds.contains(string(row, 'debtId')),
-          'pembayaran ke utang/piutang');
-      requireReference(transactionIds.contains(string(row, 'transactionId')),
-          'pembayaran ke transaksi');
+      final debtId = string(row, 'debtId');
+      final transactionId = string(row, 'transactionId');
+      requireReference(debtIds.contains(debtId), 'pembayaran ke utang/piutang');
+      requireReference(transactionIds.contains(transactionId), 'pembayaran ke transaksi');
+      if (!paymentTransactionIds.add(transactionId)) {
+        throw const FormatException('Transaksi digunakan lebih dari satu pembayaran utang/piutang.');
+      }
+      final paymentAmount = integer(row, 'amount');
+      final debt = debtById[debtId]!;
+      final linkedTransaction = transactionById[transactionId]!;
+      final expectedType = string(debt, 'direction') == 'receivable'
+          ? 'income'
+          : 'expense';
+      if (paymentAmount <= 0 ||
+          integer(linkedTransaction, 'amount') != paymentAmount ||
+          string(linkedTransaction, 'type') != expectedType) {
+        throw const FormatException('Nominal atau tipe transaksi pembayaran utang/piutang tidak sesuai.');
+      }
+      paidByDebt[debtId] = (paidByDebt[debtId] ?? 0) + paymentAmount;
+    }
+    for (final entry in paidByDebt.entries) {
+      if (entry.value > integer(debtById[entry.key]!, 'amount')) {
+        throw const FormatException('Total pembayaran melebihi nilai utang/piutang.');
+      }
+    }
+    for (final row in billRows) {
+      final paymentId = row['paymentTransactionId'];
+      final isPaid = boolean(row, 'isPaid');
+      if (paymentId is String) {
+        requireReference(transactionIds.contains(paymentId),
+            'tagihan ke transaksi pembayaran');
+        final payment = transactionById[paymentId]!;
+        if (!isPaid ||
+            string(payment, 'type') != 'expense' ||
+            integer(payment, 'amount') != integer(row, 'amount')) {
+          throw const FormatException('Status atau nominal pembayaran tagihan tidak sesuai.');
+        }
+      } else if (isPaid) {
+        throw const FormatException('Tagihan lunas tidak memiliki transaksi pembayaran.');
+      }
     }
     for (final row in recurringRows) {
       requireReference(accountIds.contains(string(row, 'accountId')),
           'jadwal berulang ke rekening');
     }
-    for (final row in billRows) {
-      final paymentId = row['paymentTransactionId'];
-      if (paymentId is String) {
-        requireReference(transactionIds.contains(paymentId),
-            'tagihan ke transaksi pembayaran');
-      }
-    }
-
     await transaction(() async {
       await delete(recurringTransactions).go();
       await delete(debtPayments).go();
