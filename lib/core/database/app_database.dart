@@ -1049,6 +1049,69 @@ class AppDatabase extends _$AppDatabase {
       return value;
     }
 
+    // Validate primary keys and relationships before touching the active database.
+    Set<String> ids(List<Map<String, dynamic>> source, String table) {
+      final result = <String>{};
+      for (final row in source) {
+        final id = string(row, 'id');
+        if (!result.add(id)) {
+          throw FormatException('ID duplikat pada data $table.');
+        }
+      }
+      return result;
+    }
+
+    final accountIds = ids(accountRows, 'accounts');
+    final transactionIds = ids(transactionRows, 'financeTransactions');
+    final debtIds = ids(debtRows, 'debts');
+    final goalIds = ids(goalRows, 'financialGoals');
+    ids(ledgerRows, 'ledgerEntries');
+    ids(transferRows, 'transfers');
+    ids(budgetRows, 'budgets');
+    ids(billRows, 'bills');
+    ids(debtPaymentRows, 'debtPayments');
+    ids(recurringRows, 'recurringTransactions');
+
+    void requireReference(bool exists, String relation) {
+      if (!exists) throw FormatException('Relasi backup tidak valid: $relation.');
+    }
+
+    for (final row in transactionRows) {
+      requireReference(accountIds.contains(string(row, 'accountId')),
+          'transaksi ke rekening');
+    }
+    for (final row in ledgerRows) {
+      requireReference(transactionIds.contains(string(row, 'transactionId')),
+          'ledger ke transaksi');
+      requireReference(accountIds.contains(string(row, 'accountId')),
+          'ledger ke rekening');
+    }
+    for (final row in transferRows) {
+      requireReference(transactionIds.contains(string(row, 'transactionId')),
+          'transfer ke transaksi');
+      requireReference(accountIds.contains(string(row, 'fromAccountId')),
+          'transfer dari rekening');
+      requireReference(accountIds.contains(string(row, 'toAccountId')),
+          'transfer ke rekening');
+    }
+    for (final row in debtPaymentRows) {
+      requireReference(debtIds.contains(string(row, 'debtId')),
+          'pembayaran ke utang/piutang');
+      requireReference(transactionIds.contains(string(row, 'transactionId')),
+          'pembayaran ke transaksi');
+    }
+    for (final row in recurringRows) {
+      requireReference(accountIds.contains(string(row, 'accountId')),
+          'jadwal berulang ke rekening');
+    }
+    for (final row in billRows) {
+      final paymentId = row['paymentTransactionId'];
+      if (paymentId is String) {
+        requireReference(transactionIds.contains(paymentId),
+            'tagihan ke transaksi pembayaran');
+      }
+    }
+
     await transaction(() async {
       await delete(recurringTransactions).go();
       await delete(debtPayments).go();
