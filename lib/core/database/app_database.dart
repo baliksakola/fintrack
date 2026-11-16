@@ -778,37 +778,61 @@ class AppDatabase extends _$AppDatabase {
     if (amount <= 0 || title.trim().isEmpty) {
       throw ArgumentError('Nominal dan deskripsi wajib valid.');
     }
-    final current = await (select(financeTransactions)
-      ..where((t) => t.id.equals(transactionId))).getSingleOrNull();
-    if (current == null) throw StateError('Transaksi tidak ditemukan.');
-    if (current.type == 'transfer') {
-      throw StateError('Transaksi transfer belum dapat diedit.');
-    }
-    final linkedDebtPayment = await (select(debtPayments)
-      ..where((payment) => payment.transactionId.equals(transactionId)))
-      .getSingleOrNull();
-    if (linkedDebtPayment != null) {
-      throw StateError('Transaksi pembayaran utang/piutang harus dikelola melalui menu utang/piutang.');
-    }
-    final account = await (select(accounts)..where((a) =>
-      a.id.equals(accountId) & a.archived.equals(false))).getSingleOrNull();
-    if (account == null) throw StateError('Rekening tidak ditemukan.');
-    final delta = current.type == 'income' ? amount : -amount;
+
     await transaction(() async {
+      // Re-read all linked records inside the write transaction so edits
+      // cannot race with another operation that changes the same ledger item.
+      final current = await (select(financeTransactions)
+        ..where((t) => t.id.equals(transactionId))).getSingleOrNull();
+      if (current == null) throw StateError('Transaksi tidak ditemukan.');
+      if (current.type == 'transfer') {
+        throw StateError('Transaksi transfer belum dapat diedit.');
+      }
+
+      final linkedDebtPayment = await (select(debtPayments)
+        ..where((payment) => payment.transactionId.equals(transactionId)))
+        .getSingleOrNull();
+      if (linkedDebtPayment != null) {
+        throw StateError(
+          'Transaksi pembayaran utang/piutang harus dikelola melalui menu utang/piutang.',
+        );
+      }
+
       final goalId = current.category?.startsWith('goal:') == true
           ? current.category!.substring(5)
           : null;
+      FinancialGoal? linkedGoal;
       if (goalId != null) {
-        final goal = await (select(financialGoals)
-          ..where((g) => g.id.equals(goalId))).getSingleOrNull();
-        if (goal != null) {
-          await (update(financialGoals)..where((g) => g.id.equals(goalId))).write(
-            FinancialGoalsCompanion(
-              savedAmount: Value((goal.savedAmount - current.amount).clamp(0, goal.targetAmount).toInt()),
-            ),
+        if (category != current.category) {
+          throw StateError(
+            'Kategori setoran target tabungan tidak dapat diubah dari riwayat transaksi.',
           );
         }
+        linkedGoal = await (select(financialGoals)
+          ..where((g) => g.id.equals(goalId))).getSingleOrNull();
+        if (linkedGoal == null) {
+          throw StateError('Target tabungan terkait tidak ditemukan.');
+        }
+        final updatedSavedAmount =
+            linkedGoal.savedAmount - current.amount + amount;
+        if (updatedSavedAmount < 0 ||
+            updatedSavedAmount > linkedGoal.targetAmount) {
+          throw ArgumentError(
+            'Perubahan nominal melebihi batas saldo target tabungan.',
+          );
+        }
+        await (update(financialGoals)..where((g) => g.id.equals(goalId))).write(
+          FinancialGoalsCompanion(
+            savedAmount: Value(updatedSavedAmount),
+          ),
+        );
       }
+
+      final account = await (select(accounts)..where((a) =>
+        a.id.equals(accountId) & a.archived.equals(false))).getSingleOrNull();
+      if (account == null) throw StateError('Rekening tidak ditemukan.');
+
+      final delta = current.type == 'income' ? amount : -amount;
       await (delete(ledgerEntries)
         ..where((entry) => entry.transactionId.equals(transactionId))).go();
       await (update(financeTransactions)
