@@ -509,6 +509,48 @@ void main() {
     expect(await db.watchTransactions().first, hasLength(1));
   });
 
+  test('backup with inconsistent debt payment is rejected without replacing data', () async {
+    await db.addAccount('Bank', 'Bank', 100000);
+    final account = (await db.watchAccounts().first).single;
+    await db.addDebt(
+      direction: 'payable',
+      partyName: 'Budi',
+      title: 'Pinjaman',
+      amount: 50000,
+    );
+    final debt = (await db.watchDebts().first).single;
+    await db.addDebtPayment(debtId: debt.id, accountId: account.id, amount: 20000);
+    final backup = jsonDecode(await db.exportBackupJson()) as Map<String, dynamic>;
+    final payment = (backup['debtPayments'] as List).single as Map<String, dynamic>;
+    payment['amount'] = 10000;
+
+    await expectLater(
+      db.restoreBackupJson(jsonEncode(backup)),
+      throwsFormatException,
+    );
+
+    expect(await db.debtRemaining(debt.id), 30000);
+    expect(await db.balanceFor(account.id), 80000);
+  });
+
+  test('legacy paid bill backup without payment link remains restorable', () async {
+    await db.addAccount('Bank', 'Bank', 100000);
+    await db.addBill(
+      title: 'Listrik',
+      category: 'Tagihan',
+      amount: 25000,
+      dueDate: DateTime(2026, 11, 1),
+    );
+    final backup = jsonDecode(await db.exportBackupJson()) as Map<String, dynamic>;
+    final bill = (backup['bills'] as List).single as Map<String, dynamic>;
+    bill['isPaid'] = true;
+    bill.remove('paymentTransactionId');
+
+    await db.restoreBackupJson(jsonEncode(backup));
+
+    expect((await db.watchBills().first).single.isPaid, isTrue);
+  });
+
   test('invalid backup format is rejected without replacing existing data', () async {
     await db.addAccount('Cash', 'Cash', 100000);
 
