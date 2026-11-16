@@ -1199,8 +1199,6 @@ class AppDatabase extends _$AppDatabase {
             integer(payment, 'amount') != integer(row, 'amount')) {
           throw const FormatException('Status atau nominal pembayaran tagihan tidak sesuai.');
         }
-      } else if (isPaid) {
-        throw const FormatException('Tagihan lunas tidak memiliki transaksi pembayaran.');
       }
     }
     for (final row in recurringRows) {
