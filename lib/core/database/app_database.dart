@@ -26,7 +26,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -50,6 +50,9 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 6) {
         await m.createTable(financialGoals);
+      }
+      if (from < 9) {
+        await m.addColumn(bills, bills.paymentTransactionId);
       }
       if (from < 8) {
         final existingRecurringTable = await customSelect(
@@ -277,7 +280,11 @@ class AppDatabase extends _$AppDatabase {
         createdAt: now,
       ));
       await (update(bills)..where((b) => b.id.equals(billId))).write(
-        BillsCompanion(isPaid: const Value(true), paidAt: Value(now)),
+        BillsCompanion(
+          isPaid: const Value(true),
+          paidAt: Value(now),
+          paymentTransactionId: Value(transactionId),
+        ),
       );
 
       if (bill.isMonthly && bill.recurrenceEndDate == null) {
@@ -797,6 +804,14 @@ class AppDatabase extends _$AppDatabase {
           'Transaksi pembayaran utang/piutang harus dikelola melalui menu utang/piutang.',
         );
       }
+      final linkedBill = await (select(bills)
+        ..where((b) => b.paymentTransactionId.equals(transactionId)))
+        .getSingleOrNull();
+      if (linkedBill != null) {
+        throw StateError(
+          'Transaksi pembayaran tagihan harus dikelola melalui menu tagihan.',
+        );
+      }
 
       final goalId = current.category?.startsWith('goal:') == true
           ? current.category!.substring(5)
@@ -962,6 +977,7 @@ class AppDatabase extends _$AppDatabase {
         'isPaid': row.isPaid, 'isMonthly': row.isMonthly,
         'recurrenceEndDate': row.recurrenceEndDate?.toIso8601String(),
         'paidAt': row.paidAt?.toIso8601String(),
+        'paymentTransactionId': row.paymentTransactionId,
         'createdAt': row.createdAt.toIso8601String(),
       }).toList(),
     };
@@ -1134,6 +1150,11 @@ class AppDatabase extends _$AppDatabase {
           isMonthly: Value(boolean(row, 'isMonthly')),
           recurrenceEndDate: Value(row['recurrenceEndDate'] is String ? DateTime.parse(row['recurrenceEndDate'] as String) : null),
           paidAt: Value(paidAt is String ? DateTime.parse(paidAt) : null),
+          paymentTransactionId: Value(
+            row['paymentTransactionId'] is String
+                ? row['paymentTransactionId'] as String
+                : null,
+          ),
           createdAt: date(row, 'createdAt'),
         ));
       }
