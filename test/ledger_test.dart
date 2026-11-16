@@ -585,6 +585,48 @@ void main() {
     expect(schedule.isActive, isFalse);
   });
 
+  test('concurrent recurring processing creates each due occurrence only once', () async {
+    await db.addAccount('Bank', 'Bank', 100000);
+    final account = (await db.watchAccounts().first).single;
+    await db.addRecurringTransaction(
+      type: 'expense',
+      accountId: account.id,
+      amount: 10000,
+      title: 'Internet',
+      firstDueDate: DateTime(2026, 1, 31),
+      endDate: DateTime(2026, 3, 31),
+    );
+
+    final results = await Future.wait([
+      db.processDueRecurringTransactions(throughDate: DateTime(2026, 4, 1)),
+      db.processDueRecurringTransactions(throughDate: DateTime(2026, 4, 1)),
+    ]);
+
+    expect(results.reduce((a, b) => a + b), 3);
+    expect(await db.balanceFor(account.id), 70000);
+    expect(await db.watchTransactions().first, hasLength(3));
+  });
+
+  test('deleting recurring schedule preserves already generated ledger history', () async {
+    await db.addAccount('Bank', 'Bank', 100000);
+    final account = (await db.watchAccounts().first).single;
+    await db.addRecurringTransaction(
+      type: 'expense',
+      accountId: account.id,
+      amount: 15000,
+      title: 'Internet',
+      firstDueDate: DateTime(2026, 1, 1),
+    );
+    final schedule = (await db.watchRecurringTransactions().first).single;
+    await db.processDueRecurringTransactions(throughDate: DateTime(2026, 1, 1));
+
+    await db.deleteRecurringTransaction(schedule.id);
+
+    expect(await db.watchRecurringTransactions().first, isEmpty);
+    expect(await db.watchTransactions().first, hasLength(1));
+    expect(await db.balanceFor(account.id), 85000);
+  });
+
   test('recurring schedules are preserved in backup and restore', () async {
     await db.addAccount('Bank', 'Bank', 0);
     final account = (await db.watchAccounts().first).single;
