@@ -487,6 +487,28 @@ void main() {
     expect(await db.watchTransactions().first, hasLength(1));
   });
 
+  test('backup with mismatched ledger amount is rejected without replacing data', () async {
+    await db.addAccount('Cash', 'Cash', 100000);
+    final account = (await db.watchAccounts().first).single;
+    await db.addExpense(
+      accountId: account.id,
+      amount: 25000,
+      title: 'Belanja',
+    );
+    final backup = jsonDecode(await db.exportBackupJson()) as Map<String, dynamic>;
+    final ledger = (backup['ledgerEntries'] as List).single as Map<String, dynamic>;
+    ledger['amountDelta'] = -10000;
+
+    await expectLater(
+      db.restoreBackupJson(jsonEncode(backup)),
+      throwsFormatException,
+    );
+
+    expect((await db.watchAccounts().first).single.name, 'Cash');
+    expect(await db.balanceFor(account.id), 75000);
+    expect(await db.watchTransactions().first, hasLength(1));
+  });
+
   test('invalid backup format is rejected without replacing existing data', () async {
     await db.addAccount('Cash', 'Cash', 100000);
 
