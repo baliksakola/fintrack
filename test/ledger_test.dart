@@ -552,6 +552,36 @@ void main() {
     expect((await db.watchBills().first).single.isPaid, isTrue);
   });
 
+  test('backup with goal balance below contribution history is rejected', () async {
+    await db.addAccount('Operasional', 'Bank', 500000);
+    await db.addAccount('Tabungan', 'Bank', 0);
+    final accounts = await db.watchAccounts().first;
+    await db.saveFinancialGoal(
+      title: 'Dana Darurat',
+      targetAmount: 300000,
+      savedAmount: 0,
+      targetDate: DateTime(2027, 12, 31),
+    );
+    final goal = (await db.watchFinancialGoals().first).single;
+    await db.addGoalContribution(
+      goalId: goal.id,
+      fromAccountId: accounts.first.id,
+      toAccountId: accounts.last.id,
+      amount: 100000,
+    );
+    final backup = jsonDecode(await db.exportBackupJson()) as Map<String, dynamic>;
+    final goalRow = (backup['financialGoals'] as List).single as Map<String, dynamic>;
+    goalRow['savedAmount'] = 50000;
+
+    await expectLater(
+      db.restoreBackupJson(jsonEncode(backup)),
+      throwsFormatException,
+    );
+
+    expect((await db.watchFinancialGoals().first).single.savedAmount, 100000);
+    expect(await db.balanceFor(accounts.first.id), 400000);
+  });
+
   test('invalid backup format is rejected without replacing existing data', () async {
     await db.addAccount('Cash', 'Cash', 100000);
 
