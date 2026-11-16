@@ -880,6 +880,14 @@ class AppDatabase extends _$AppDatabase {
       throw StateError('Transaksi pembayaran utang/piutang harus dikelola melalui menu utang/piutang.');
     }
     await transaction(() async {
+      final linkedBill = await (select(bills)
+        ..where((b) => b.paymentTransactionId.equals(transactionId)))
+        .getSingleOrNull();
+      if (linkedBill != null) {
+        throw StateError(
+          'Transaksi pembayaran tagihan harus dikelola melalui menu tagihan.',
+        );
+      }
       final goalId = current.category?.startsWith('goal:') == true
           ? current.category!.substring(5)
           : null;
