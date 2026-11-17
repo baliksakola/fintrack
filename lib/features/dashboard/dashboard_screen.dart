@@ -172,6 +172,40 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 }
 
+class _BalanceMetric extends StatelessWidget {
+  const _BalanceMetric({
+    required this.label, required this.amount,
+    required this.icon, required this.color,
+  });
+  final String label;
+  final int amount;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 5),
+        Expanded(child: Text(label, maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.82),
+            fontSize: 10, fontWeight: FontWeight.w500))),
+      ]),
+      const SizedBox(height: 5),
+      FittedBox(
+        alignment: Alignment.centerLeft,
+        fit: BoxFit.scaleDown,
+        child: Text(_rupiah.format(amount), style: TextStyle(
+          color: color, fontSize: 16, fontWeight: FontWeight.w800,
+        )),
+      ),
+    ],
+  );
+}
+
 class _OverviewPage extends StatelessWidget {
   const _OverviewPage({required this.database, required this.onNavigate});
   final AppDatabase database;
@@ -183,73 +217,87 @@ class _OverviewPage extends StatelessWidget {
     children: [
       StreamBuilder<int>(
         stream: database.watchTotalBalance(),
-        builder: (context, snapshot) {
-          final total = snapshot.data ?? 0;
-          return Card(
-            clipBehavior: Clip.antiAlias,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Theme.of(context).colorScheme.primaryContainer,
-                    Theme.of(context).colorScheme.surfaceContainerHighest,
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Total saldo',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.10),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(
-                          Icons.account_balance_wallet_outlined,
-                          size: 19,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FittedBox(
-                      alignment: Alignment.centerLeft,
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        _rupiah.format(total),
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.6,
-                        ),
-                      ),
+        builder: (context, balanceSnapshot) {
+          final total = balanceSnapshot.data ?? 0;
+          return StreamBuilder<List<FinanceTransaction>>(
+            stream: database.watchTransactions(),
+            builder: (context, transactionSnapshot) {
+              final now = DateTime.now();
+              final monthStart = DateTime(now.year, now.month);
+              final nextMonth = DateTime(now.year, now.month + 1);
+              var income = 0;
+              var expense = 0;
+              for (final tx in transactionSnapshot.data ?? <FinanceTransaction>[]) {
+                if (tx.occurredAt.isBefore(monthStart) ||
+                    !tx.occurredAt.isBefore(nextMonth)) continue;
+                if (tx.type == 'income') income += tx.amount;
+                if (tx.type == 'expense') expense += tx.amount;
+              }
+              return Card(
+                clipBehavior: Clip.antiAlias,
+                margin: EdgeInsets.zero,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFF087FB5), Color(0xFF075B91)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Gabungan seluruh rekening aktif',
-                    style: Theme.of(context).textTheme.bodySmall,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        const Expanded(
+                          child: Text('Total saldo', style: TextStyle(
+                            color: Colors.white, fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          )),
+                        ),
+                        Icon(Icons.account_balance_wallet_rounded,
+                          color: Colors.white.withValues(alpha: 0.9), size: 23),
+                      ]),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FittedBox(
+                          alignment: Alignment.centerLeft,
+                          fit: BoxFit.scaleDown,
+                          child: Text(_rupiah.format(total), style: const TextStyle(
+                            color: Colors.white, fontSize: 31,
+                            fontWeight: FontWeight.w800, letterSpacing: -0.7,
+                          )),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text('Gabungan seluruh rekening aktif', style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.76), fontSize: 11,
+                      )),
+                      const SizedBox(height: 18),
+                      Container(height: 1, color: Colors.white.withValues(alpha: 0.22)),
+                      const SizedBox(height: 13),
+                      Row(children: [
+                        Expanded(child: _BalanceMetric(
+                          label: 'Pemasukan bulan ini', amount: income,
+                          icon: Icons.south_west_rounded,
+                          color: const Color(0xFFB8F2D6),
+                        )),
+                        Container(width: 1, height: 42,
+                          color: Colors.white.withValues(alpha: 0.22)),
+                        const SizedBox(width: 14),
+                        Expanded(child: _BalanceMetric(
+                          label: 'Pengeluaran bulan ini', amount: expense,
+                          icon: Icons.north_east_rounded,
+                          color: const Color(0xFFFFD0D0),
+                        )),
+                      ]),
+                    ],
                   ),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           );
         },
       ),
