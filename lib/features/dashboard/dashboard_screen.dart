@@ -47,20 +47,94 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     ];
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_titles[_selectedIndex]),
-        actions: [
-          IconButton(
-            tooltip: 'Tambah rekening',
-            onPressed: () => _showAccountDialog(context, db),
-            icon: const Icon(Icons.add_card),
-          ),
-        ],
-      ),
       body: SafeArea(
-        child: IndexedStack(
-          index: _selectedIndex,
-          children: pages,
+        bottom: false,
+        child: Column(
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(18, 10, 14, 18),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF087FB5), Color(0xFF075B91)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.vertical(
+                  bottom: Radius.circular(26),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.16),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.account_balance_wallet_rounded,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          'FinTrack Paday',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Tambah rekening',
+                        onPressed: () => _showAccountDialog(context, db),
+                        icon: const Icon(Icons.add_card, color: Colors.white),
+                      ),
+                      IconButton(
+                        tooltip: 'Pengaturan dan lainnya',
+                        onPressed: () => setState(() => _selectedIndex = 4),
+                        icon: const Icon(Icons.account_circle_outlined,
+                            color: Colors.white, size: 27),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Selamat ${DateTime.now().hour < 11 ? 'pagi' : DateTime.now().hour < 15 ? 'siang' : DateTime.now().hour < 18 ? 'sore' : 'malam'},',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.82),
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    _titles[_selectedIndex],
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 23,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: IndexedStack(
+                index: _selectedIndex,
+                children: pages,
+              ),
+            ),
+          ],
         ),
       ),
       bottomNavigationBar: NavigationBar(
