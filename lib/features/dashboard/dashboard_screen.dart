@@ -39,7 +39,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Widget build(BuildContext context) {
     final db = ref.watch(databaseProvider);
     final pages = [
-      _OverviewPage(database: db),
+      _OverviewPage(database: db, onNavigate: (index) => setState(() => _selectedIndex = index)),
       _ActivityPage(database: db),
       _PlanningPage(database: db),
       _CalendarPage(database: db),
@@ -173,8 +173,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 }
 
 class _OverviewPage extends StatelessWidget {
-  const _OverviewPage({required this.database});
+  const _OverviewPage({required this.database, required this.onNavigate});
   final AppDatabase database;
+  final ValueChanged<int> onNavigate;
 
   @override
   Widget build(BuildContext context) => ListView(
@@ -253,35 +254,65 @@ class _OverviewPage extends StatelessWidget {
         },
       ),
       const SizedBox(height: 20),
-      Text('Aksi cepat', style: Theme.of(context).textTheme.titleMedium),
-      const SizedBox(height: 8),
-      Row(
+      Text('Menu cepat', style: Theme.of(context).textTheme.titleMedium?.copyWith(
+        fontWeight: FontWeight.w700,
+      )),
+      const SizedBox(height: 10),
+      GridView.count(
+        crossAxisCount: 4,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 8,
+        childAspectRatio: 0.88,
         children: [
-          Expanded(
-            child: _QuickAction(
-              icon: Icons.south_west_rounded,
-              color: const Color(0xFF15966F),
-              label: 'Pemasukan',
-              onTap: () => _showTransactionDialog(context, database, 'income'),
-            ),
+          _QuickAction(
+            icon: Icons.south_west_rounded,
+            color: const Color(0xFF15966F),
+            label: 'Pemasukan',
+            onTap: () => _showTransactionDialog(context, database, 'income'),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _QuickAction(
-              icon: Icons.north_east_rounded,
-              color: const Color(0xFFE05B62),
-              label: 'Pengeluaran',
-              onTap: () => _showTransactionDialog(context, database, 'expense'),
-            ),
+          _QuickAction(
+            icon: Icons.north_east_rounded,
+            color: const Color(0xFFE05B62),
+            label: 'Pengeluaran',
+            onTap: () => _showTransactionDialog(context, database, 'expense'),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _QuickAction(
-              icon: Icons.swap_horiz_rounded,
-              color: const Color(0xFF3978D5),
-              label: 'Transfer',
-              onTap: () => _showTransferDialog(context, database),
-            ),
+          _QuickAction(
+            icon: Icons.swap_horiz_rounded,
+            color: const Color(0xFF3978D5),
+            label: 'Transfer',
+            onTap: () => _showTransferDialog(context, database),
+          ),
+          _QuickAction(
+            icon: Icons.receipt_long_rounded,
+            color: const Color(0xFF0B8E9D),
+            label: 'Aktivitas',
+            onTap: () => onNavigate(1),
+          ),
+          _QuickAction(
+            icon: Icons.savings_rounded,
+            color: const Color(0xFFE09A2D),
+            label: 'Rencana',
+            onTap: () => onNavigate(2),
+          ),
+          _QuickAction(
+            icon: Icons.calendar_month_rounded,
+            color: const Color(0xFF3978D5),
+            label: 'Kalender',
+            onTap: () => onNavigate(3),
+          ),
+          _QuickAction(
+            icon: Icons.bar_chart_rounded,
+            color: const Color(0xFF15966F),
+            label: 'Laporan',
+            onTap: () => onNavigate(4),
+          ),
+          _QuickAction(
+            icon: Icons.apps_rounded,
+            color: const Color(0xFF68758A),
+            label: 'Semua',
+            onTap: () => onNavigate(4),
           ),
         ],
       ),
