@@ -229,9 +229,15 @@ class _OverviewPage extends StatelessWidget {
               var expense = 0;
               for (final tx in transactionSnapshot.data ?? <FinanceTransaction>[]) {
                 if (tx.occurredAt.isBefore(monthStart) ||
-                    !tx.occurredAt.isBefore(nextMonth)) continue;
-                if (tx.type == 'income') income += tx.amount;
-                if (tx.type == 'expense') expense += tx.amount;
+                    !tx.occurredAt.isBefore(nextMonth)) {
+                  continue;
+                }
+                if (tx.type == 'income') {
+                  income += tx.amount;
+                }
+                if (tx.type == 'expense') {
+                  expense += tx.amount;
+                }
               }
               return Card(
                 clipBehavior: Clip.antiAlias,
