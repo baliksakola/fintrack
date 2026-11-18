@@ -18,12 +18,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [databaseProvider.overrideWithValue(db)],
-        child: MaterialApp(
-          home: MediaQuery(
-            data: const MediaQueryData(textScaler: TextScaler.linear(1.3)),
-            child: const DashboardScreen(),
-          ),
-        ),
+        child: const MaterialApp(home: DashboardScreen()),
       ),
     );
     await tester.pump();
@@ -48,7 +43,12 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [databaseProvider.overrideWithValue(db)],
-        child: const MaterialApp(home: DashboardScreen()),
+        child: MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(textScaler: TextScaler.linear(1.3)),
+            child: const DashboardScreen(),
+          ),
+        ),
       ),
     );
     await tester.pump();
