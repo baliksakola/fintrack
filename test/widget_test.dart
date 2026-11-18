@@ -7,6 +7,31 @@ import 'package:fintrack/core/database/app_database.dart';
 import 'package:fintrack/features/dashboard/dashboard_screen.dart';
 
 void main() {
+  testWidgets('dashboard fits compact phone width without layout overflow', (tester) async {
+    await initializeDateFormatting('id_ID');
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final db = AppDatabase(NativeDatabase.memory());
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(db)],
+        child: const MaterialApp(home: DashboardScreen()),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('FinTrack Paday'), findsOneWidget);
+    expect(find.text('Total saldo'), findsOneWidget);
+    expect(find.text('Menu cepat'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await db.closeDatabase();
+  });
+
   testWidgets('FinTrack dashboard renders', (tester) async {
     await initializeDateFormatting('id_ID');
     final db = AppDatabase(NativeDatabase.memory());
