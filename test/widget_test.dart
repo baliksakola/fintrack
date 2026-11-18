@@ -32,6 +32,33 @@ void main() {
     await db.closeDatabase();
   });
 
+  testWidgets('dashboard remains usable with larger text scaling', (tester) async {
+    await initializeDateFormatting('id_ID');
+    tester.view.physicalSize = const Size(360, 740);
+    tester.view.devicePixelRatio = 1;
+    tester.view.textScaler = const TextScaler.linear(1.3);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetTextScaler);
+
+    final db = AppDatabase(NativeDatabase.memory());
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(db)],
+        child: const MaterialApp(home: DashboardScreen()),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.text('FinTrack Paday'), findsOneWidget);
+    expect(find.text('Total saldo'), findsOneWidget);
+    expect(find.text('Menu cepat'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await db.closeDatabase();
+  });
+
   testWidgets('FinTrack dashboard renders', (tester) async {
     await initializeDateFormatting('id_ID');
     final db = AppDatabase(NativeDatabase.memory());
