@@ -1898,31 +1898,40 @@ class _QuickAction extends StatelessWidget {
       borderRadius: BorderRadius.circular(18),
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 2),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 58,
-              height: 58,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(19),
-              ),
-              child: Icon(icon, size: 27, color: color),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
+        padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final iconSize = math.min(58.0, constraints.maxHeight * 0.68);
+            return Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: iconSize,
+                  height: iconSize,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(iconSize * 0.33),
+                  ),
+                  child: Icon(
+                    icon,
+                    size: iconSize * 0.47,
+                    color: color,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
