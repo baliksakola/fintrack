@@ -137,36 +137,60 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: (index) => setState(() => _selectedIndex = index),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.space_dashboard_outlined),
-            selectedIcon: Icon(Icons.space_dashboard),
-            label: 'Ringkasan',
+      bottomNavigationBar: Container(
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.65),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.receipt_long_outlined),
-            selectedIcon: Icon(Icons.receipt_long),
-            label: 'Aktivitas',
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.045),
+              blurRadius: 14,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(30),
+          child: NavigationBar(
+            height: 76,
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            indicatorColor: const Color(0xFF087FB5).withValues(alpha: 0.12),
+            selectedIndex: _selectedIndex,
+            onDestinationSelected: (index) => setState(() => _selectedIndex = index),
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.space_dashboard_outlined),
+                selectedIcon: Icon(Icons.space_dashboard_rounded),
+                label: 'Ringkasan',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.receipt_long_outlined),
+                selectedIcon: Icon(Icons.receipt_long_rounded),
+                label: 'Aktivitas',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.event_note_outlined),
+                selectedIcon: Icon(Icons.event_note_rounded),
+                label: 'Rencana',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.calendar_month_outlined),
+                selectedIcon: Icon(Icons.calendar_month_rounded),
+                label: 'Kalender',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.more_horiz),
+                selectedIcon: Icon(Icons.more_horiz_rounded),
+                label: 'Lainnya',
+              ),
+            ],
           ),
-          NavigationDestination(
-            icon: Icon(Icons.event_note_outlined),
-            selectedIcon: Icon(Icons.event_note),
-            label: 'Rencana',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.calendar_month_outlined),
-            selectedIcon: Icon(Icons.calendar_month),
-            label: 'Kalender',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.more_horiz),
-            selectedIcon: Icon(Icons.more_horiz),
-            label: 'Lainnya',
-          ),
-        ],
+        ),
       ),
     );
   }
