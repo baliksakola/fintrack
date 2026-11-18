@@ -162,7 +162,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             height: 76,
             backgroundColor: Colors.transparent,
             elevation: 0,
-            indicatorColor: const Color(0xFF087FB5).withValues(alpha: 0.12),
+            indicatorColor: Theme.of(context).colorScheme.primary.withValues(
+              alpha: Theme.of(context).brightness == Brightness.dark ? 0.28 : 0.12,
+            ),
             selectedIndex: _selectedIndex,
             onDestinationSelected: (index) => setState(() => _selectedIndex = index),
             destinations: const [
