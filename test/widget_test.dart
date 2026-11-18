@@ -65,6 +65,61 @@ void main() {
     await db.closeDatabase();
   });
 
+  testWidgets('dashboard cash flow excludes archived account transactions', (tester) async {
+    await initializeDateFormatting('id_ID');
+    final db = AppDatabase(NativeDatabase.memory());
+
+    await db.addAccount('Aktif', 'Bank', 1000);
+    await db.addAccount('Arsip', 'Bank', 9000);
+    final accounts = await db.getAllAccounts();
+    final active = accounts.firstWhere((account) => account.name == 'Aktif');
+    final archived = accounts.firstWhere((account) => account.name == 'Arsip');
+
+    await db.addIncome(
+      accountId: active.id,
+      amount: 500,
+      title: 'Pemasukan aktif',
+    );
+    await db.addExpense(
+      accountId: active.id,
+      amount: 100,
+      title: 'Pengeluaran aktif',
+    );
+    await db.addIncome(
+      accountId: archived.id,
+      amount: 7000,
+      title: 'Pemasukan arsip',
+    );
+    await db.addExpense(
+      accountId: archived.id,
+      amount: 3000,
+      title: 'Pengeluaran arsip',
+    );
+    await db.customStatement(
+      'UPDATE accounts SET archived = 1 WHERE id = ?',
+      [archived.id],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(db)],
+        child: const MaterialApp(home: DashboardScreen()),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(await db.watchTotalBalance().first, 1400);
+    expect(find.text('Rp 1.400'), findsOneWidget);
+    expect(find.text('Rp 500'), findsOneWidget);
+    expect(find.text('Rp 100'), findsOneWidget);
+    expect(find.text('Rp 7.000'), findsNothing);
+    expect(find.text('Rp 3.000'), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    await db.closeDatabase();
+  });
+
   testWidgets('FinTrack dashboard renders', (tester) async {
     await initializeDateFormatting('id_ID');
     final db = AppDatabase(NativeDatabase.memory());
