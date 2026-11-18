@@ -248,27 +248,34 @@ class _OverviewPage extends StatelessWidget {
         stream: database.watchTotalBalance(),
         builder: (context, balanceSnapshot) {
           final total = balanceSnapshot.data ?? 0;
-          return StreamBuilder<List<FinanceTransaction>>(
-            stream: database.watchTransactions(),
-            builder: (context, transactionSnapshot) {
-              final now = DateTime.now();
-              final monthStart = DateTime(now.year, now.month);
-              final nextMonth = DateTime(now.year, now.month + 1);
-              var income = 0;
-              var expense = 0;
-              for (final tx in transactionSnapshot.data ?? <FinanceTransaction>[]) {
-                if (tx.occurredAt.isBefore(monthStart) ||
-                    !tx.occurredAt.isBefore(nextMonth)) {
-                  continue;
-                }
-                if (tx.type == 'income') {
-                  income += tx.amount;
-                }
-                if (tx.type == 'expense') {
-                  expense += tx.amount;
-                }
-              }
-              return Card(
+          return StreamBuilder<List<Account>>(
+            stream: database.watchAccounts(),
+            builder: (context, accountSnapshot) {
+              final activeAccountIds = (accountSnapshot.data ?? <Account>[])
+                  .map((account) => account.id)
+                  .toSet();
+              return StreamBuilder<List<FinanceTransaction>>(
+                stream: database.watchTransactions(),
+                builder: (context, transactionSnapshot) {
+                  final now = DateTime.now();
+                  final monthStart = DateTime(now.year, now.month);
+                  final nextMonth = DateTime(now.year, now.month + 1);
+                  var income = 0;
+                  var expense = 0;
+                  for (final tx in transactionSnapshot.data ?? <FinanceTransaction>[]) {
+                    if (!activeAccountIds.contains(tx.accountId) ||
+                        tx.occurredAt.isBefore(monthStart) ||
+                        !tx.occurredAt.isBefore(nextMonth)) {
+                      continue;
+                    }
+                    if (tx.type == 'income') {
+                      income += tx.amount;
+                    }
+                    if (tx.type == 'expense') {
+                      expense += tx.amount;
+                    }
+                  }
+                  return Card(
                 clipBehavior: Clip.antiAlias,
                 margin: EdgeInsets.zero,
                 child: Container(
@@ -331,6 +338,8 @@ class _OverviewPage extends StatelessWidget {
                     ],
                   ),
                 ),
+                  );
+                },
               );
             },
           );
