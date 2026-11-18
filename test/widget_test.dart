@@ -18,7 +18,12 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [databaseProvider.overrideWithValue(db)],
-        child: const MaterialApp(home: DashboardScreen()),
+        child: MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(textScaler: TextScaler.linear(1.3)),
+            child: const DashboardScreen(),
+          ),
+        ),
       ),
     );
     await tester.pump();
@@ -36,10 +41,8 @@ void main() {
     await initializeDateFormatting('id_ID');
     tester.view.physicalSize = const Size(360, 740);
     tester.view.devicePixelRatio = 1;
-    tester.view.textScaler = const TextScaler.linear(1.3);
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    addTearDown(tester.view.resetTextScaler);
 
     final db = AppDatabase(NativeDatabase.memory());
     await tester.pumpWidget(
