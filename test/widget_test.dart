@@ -33,7 +33,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.text('Menu cepat'),
       200,
-      scrollable: find.byType(ListView).first,
+      scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('Menu cepat'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -65,6 +65,12 @@ void main() {
 
     expect(find.text('FinTrack Paday'), findsOneWidget);
     expect(find.text('Total saldo'), findsOneWidget);
+    expect(find.text('Rekening'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Menu cepat'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Menu cepat'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
@@ -146,7 +152,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.text('Menu cepat'),
       200,
-      scrollable: find.byType(ListView).first,
+      scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('Menu cepat'), findsOneWidget);
     expect(find.text('Aktivitas'), findsNWidgets(2));
@@ -155,7 +161,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.text('Prediksi kondisi keuangan'),
       300,
-      scrollable: find.byType(ListView).first,
+      scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('Prediksi kondisi keuangan'), findsOneWidget);
     expect(find.text('Lainnya'), findsOneWidget);
