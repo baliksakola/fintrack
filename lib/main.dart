@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -8,18 +10,30 @@ import 'core/notifications/bill_notification_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('id_ID');
-  await BillNotificationService.instance.initialize();
   final db = await AppDatabase.open();
+  runApp(ProviderScope(
+    overrides: [databaseProvider.overrideWithValue(db)],
+    child: const FinTrackApp(),
+  ));
+
+  // Non-essential startup work runs after the first screen can be displayed.
+  unawaited(_initializeBackgroundServices(db));
+}
+
+Future<void> _initializeBackgroundServices(AppDatabase db) async {
+  try {
+    await BillNotificationService.instance.initialize();
+  } catch (error, stackTrace) {
+    debugPrint('Gagal menginisialisasi notifikasi: $error');
+    debugPrintStack(stackTrace: stackTrace);
+  }
+
   try {
     await db.processDueRecurringTransactions();
   } catch (error, stackTrace) {
     debugPrint('Gagal memproses transaksi berulang: $error');
     debugPrintStack(stackTrace: stackTrace);
   }
-  runApp(ProviderScope(
-    overrides: [databaseProvider.overrideWithValue(db)],
-    child: const FinTrackApp(),
-  ));
 }
 
 class FinTrackApp extends StatelessWidget {
