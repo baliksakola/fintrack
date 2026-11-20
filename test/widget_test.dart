@@ -155,9 +155,9 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('Menu cepat'), findsOneWidget);
-    expect(find.text('Aktivitas'), findsNWidgets(2));
-    expect(find.text('Rencana'), findsNWidgets(2));
-    expect(find.text('Kalender'), findsNWidgets(2));
+    expect(find.text('Aktivitas'), findsOneWidget);
+    expect(find.text('Rencana'), findsOneWidget);
+    expect(find.text('Kalender'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Prediksi kondisi keuangan'),
       300,
