@@ -345,6 +345,20 @@ class _OverviewPage extends StatelessWidget {
           );
         },
       ),
+      const SizedBox(height: 16),
+      Row(
+        children: [
+          Expanded(
+            child: Text('Rekening', style: Theme.of(context).textTheme.titleMedium),
+          ),
+          TextButton.icon(
+            onPressed: () => _showAccountDialog(context, database),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Tambah'),
+          ),
+        ],
+      ),
+      _AccountsList(database: database),
       const SizedBox(height: 20),
       Text('Menu cepat', style: Theme.of(context).textTheme.titleMedium?.copyWith(
         fontWeight: FontWeight.w700,
@@ -418,20 +432,6 @@ class _OverviewPage extends StatelessWidget {
       _SpendingInsightsCard(database: database),
       const SizedBox(height: 12),
       _DetailedMonthlyOverview(database: database),
-      const SizedBox(height: 20),
-      Row(
-        children: [
-          Expanded(
-            child: Text('Rekening', style: Theme.of(context).textTheme.titleMedium),
-          ),
-          TextButton.icon(
-            onPressed: () => _showAccountDialog(context, database),
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('Tambah'),
-          ),
-        ],
-      ),
-      _AccountsList(database: database),
       const SizedBox(height: 12),
       Text('Transaksi terbaru', style: Theme.of(context).textTheme.titleMedium),
       const SizedBox(height: 8),
