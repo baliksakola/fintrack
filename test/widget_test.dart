@@ -29,6 +29,12 @@ void main() {
 
     expect(find.text('FinTrack Paday'), findsOneWidget);
     expect(find.text('Total saldo'), findsOneWidget);
+    expect(find.text('Rekening'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Menu cepat'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Menu cepat'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
@@ -110,7 +116,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(await db.watchTotalBalance().first, 1400);
-    expect(find.text('Rp 1.400'), findsOneWidget);
+    expect(find.text('Rp 1.400'), findsNWidgets(2));
     expect(find.text('Rp 500'), findsOneWidget);
     expect(find.text('Rp 100'), findsOneWidget);
     expect(find.text('Rp 7.000'), findsNothing);
@@ -133,13 +139,19 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(find.text('Ringkasan'), findsNWidgets(2));
+    expect(find.text('Ringkasan'), findsOneWidget);
     expect(find.text('Home'), findsNothing);
+    expect(find.text('Total saldo'), findsOneWidget);
+    expect(find.text('Rekening'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Menu cepat'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Menu cepat'), findsOneWidget);
     expect(find.text('Aktivitas'), findsNWidgets(2));
     expect(find.text('Rencana'), findsNWidgets(2));
     expect(find.text('Kalender'), findsNWidgets(2));
-    expect(find.text('Total saldo'), findsOneWidget);
-    expect(find.text('Menu cepat'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Prediksi kondisi keuangan'),
       300,
